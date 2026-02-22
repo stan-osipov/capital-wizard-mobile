@@ -9,7 +9,7 @@ import WebKit
 
 struct WebViewApplicationConst {
     static let baseUrlKey = "applicationBaseUrl"
-    static let applicationBaseUrl    = "http://192.168.0.118:3005/"//"https://mobile.texpo.io/" //"https://valu-social.com/"
+    static let applicationBaseUrl    = "http://192.168.0.118:3005/"
     static let contentControllerName = "iosCW"
 }
 

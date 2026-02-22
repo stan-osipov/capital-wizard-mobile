@@ -150,7 +150,7 @@ class ApplicationService: Service {
         self.appCenter = appCenter
         appStore.applications[appCenter.id] = ApplicationData(application: appCenter)
         
-        appCenter.startDynamicModules()
+        appCenter.startDynamiccApplications()
 
         if let profile = getApplication(id: "profile") {
             switchTo(application: profile)

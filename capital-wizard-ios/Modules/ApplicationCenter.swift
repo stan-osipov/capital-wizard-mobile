@@ -1,5 +1,5 @@
 //
-//  ApplicationCenterModule.swift
+//  ApplicationCenter.swift
 //  capital-wizard-ios
 //
 //  Created by Roman on 07.02.2026.
@@ -61,7 +61,7 @@ class ApplicationCenter: NSObject, Application {
         applicationService?.applicationsAmount ?? 0
     }
     
-    func startDynamicModules() {
+    func startDynamiccApplications() {
         guard let appStore = applicationService?.appStore else {
             return
         }

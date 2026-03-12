@@ -35,6 +35,7 @@ class WebViewApplicationController: ApplicationViewController {
     
     private var preloader:      Preloader?
     private var refreshControl: UIRefreshControl?
+    private var menuTapTarget:  UIView?
     
     private lazy var windowsService: WindowsService? = ServiceManager.shared.getService()
     private var isDarkMode: Bool {
@@ -97,9 +98,35 @@ class WebViewApplicationController: ApplicationViewController {
         wkWebView.scrollView.refreshControl = refreshControl
         
         setupView(for: wkWebView, colorScheme: scheme, withPreloader: hasPreloader)
+        setupMenuTapTarget()
 
         self.wkWebView = wkWebView
         initialLoad()
+    }
+
+    private func setupMenuTapTarget() {
+        let tap = UIView()
+        tap.translatesAutoresizingMaskIntoConstraints = false
+        tap.backgroundColor = .clear
+        view.addSubview(tap)
+
+        NSLayoutConstraint.activate([
+            tap.topAnchor.constraint(equalTo: view.topAnchor),
+            tap.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tap.widthAnchor.constraint(equalToConstant: 60),
+            tap.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 44)
+        ])
+
+        let gesture = UITapGestureRecognizer(target: self, action: #selector(menuTapTargetTapped))
+        tap.addGestureRecognizer(gesture)
+
+        menuTapTarget = tap
+    }
+
+    @objc private func menuTapTargetTapped() {
+        Task { @MainActor in
+            _ = try? await wkWebView?.evaluateJavaScript("window.__capital_wizard.openMenu()")
+        }
     }
     
     func initialLoad() {

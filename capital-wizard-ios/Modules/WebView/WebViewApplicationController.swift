@@ -55,23 +55,24 @@ class WebViewApplicationController: ApplicationViewController {
         guard let contentController = contentController else {
             return
         }
-        
+
         if hasPreloader {
             preloader?.show()
         }
-        
+
         let config = WKWebViewConfiguration()
+        config.processPool = WebViewApplicationConst.sharedProcessPool
         config.userContentController = contentController
+        config.userContentController.addUserScript(self.getNativeAppScript())
         config.userContentController.addUserScript(self.getZoomDisableScript())
         
         let wkWebView = WKWebView(frame: self.view.frame, configuration: config)
         wkWebView.uiDelegate = self
-        
         wkWebView.navigationDelegate = self
+        wkWebView.allowsBackForwardNavigationGestures = true
+
         if #available(iOS 16.4, *) {
             wkWebView.isInspectable = true
-        } else {
-            // Fallback on earlier versions
         }
 
         delegate?.willStartLoad(wkWebView: wkWebView)
@@ -139,29 +140,34 @@ class WebViewApplicationController: ApplicationViewController {
 
         webView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor).isActive = true
         webView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor).isActive = true
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor).isActive = true
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor).isActive = true
-        } else {
-            webView.topAnchor.constraint(equalTo: view.topAnchor, constant: -5).isActive = true
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor).isActive = true
-        }
+        webView.topAnchor.constraint(equalTo: view.topAnchor).isActive = true
+        webView.bottomAnchor.constraint(equalTo: view.bottomAnchor).isActive = true
         
         if let preloader = preloader, hasPreloader {
             view.bringSubviewToFront(preloader)
         }
     }
     
+    private func getNativeAppScript() -> WKUserScript {
+        let source = """
+        window.__capital_wizard_native = { platform: 'ios' };
+        document.documentElement.classList.add('cw-native-ios');
+        """
+        return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    }
+
     // (Roman) TODO: Remove this. WebView should be able to adjust itself.
     private func getZoomDisableScript() -> WKUserScript {
         let source: String = "var meta = document.createElement('meta');" +
             "meta.name = 'viewport';" +
-            "meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';" +
+            "meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';" +
             "var head = document.getElementsByTagName('head')[0];" + "head.appendChild(meta);"
         return WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
     }
     
     @objc private func reloadWebView(_ sender: UIRefreshControl) {
+        webViewDidLoaded = false
+        wkWebView?.reloadFromOrigin()
     }
     
     func updateColorScheme(_ scheme: ColorScheme) {
@@ -205,14 +211,25 @@ class WebViewApplicationController: ApplicationViewController {
 }
 
 extension WebViewApplicationController: UIScrollViewDelegate {
-    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if let refresh = refreshControl, refresh.isRefreshing {
-            hardRealod()
-            refresh.endRefreshing()
-        }
-    }
 }
 extension WebViewApplicationController: WKUIDelegate {
+    func webView(_ webView: WKWebView,
+                 createWebViewWith configuration: WKWebViewConfiguration,
+                 for navigationAction: WKNavigationAction,
+                 windowFeatures: WKWindowFeatures) -> WKWebView? {
+        // Handle target="_blank" links by loading in the same view
+        if navigationAction.targetFrame == nil || navigationAction.targetFrame?.isMainFrame == false {
+            if let url = navigationAction.request.url {
+                let baseHost = URL(string: WebViewApplicationConst.applicationBaseUrl)?.host
+                if let host = url.host, host != baseHost {
+                    UIApplication.shared.open(url)
+                } else {
+                    webView.load(navigationAction.request)
+                }
+            }
+        }
+        return nil
+    }
 }
 
 extension WebViewApplicationController: WKNavigationDelegate {
@@ -228,7 +245,31 @@ extension WebViewApplicationController: WKNavigationDelegate {
         }
         refreshControl?.endRefreshing()
     }
-    
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.allow)
+            return
+        }
+
+        let baseHost = URL(string: WebViewApplicationConst.applicationBaseUrl)?.host
+
+        if navigationAction.navigationType == .linkActivated,
+           let host = url.host, host != baseHost {
+            UIApplication.shared.open(url)
+            decisionHandler(.cancel)
+            return
+        }
+
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        preloader?.hide()
+        refreshControl?.endRefreshing()
+    }
+
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         delegate?.onWebViewTerminated()
     }

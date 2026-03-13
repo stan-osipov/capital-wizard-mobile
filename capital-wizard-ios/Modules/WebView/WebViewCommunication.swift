@@ -16,7 +16,8 @@ struct WebApiError: Error, ErrorMessage {
 
 class WebViewCommunication: NSObject {
     var contentController: WKUserContentController
-    
+    var onAppReady: Event<Void> = Event()
+
     weak var wkWebView: WKWebView?
     
     private var webView: WKWebView {
@@ -76,7 +77,6 @@ class WebViewCommunication: NSObject {
 
 
     private func send(data: WebApiCall) throws {
-        print("\(try data.apiCall)")
         try webView.evaluateJavaScript(try data.apiCall)
     }
 }
@@ -109,6 +109,10 @@ extension WebViewCommunication: WKScriptMessageHandler {
         
         if eventName == "api-ready" {
             finilizeLoad()
+        }
+
+        if eventName == "app-ready" {
+            onAppReady.invoke(())
         }
     }
 }

@@ -15,10 +15,10 @@
 			</array>
 		</dict>
 	</array>
-	<key>UIStatusBarStyle</key>
-	<string>UIStatusBarStyleLightContent</string>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

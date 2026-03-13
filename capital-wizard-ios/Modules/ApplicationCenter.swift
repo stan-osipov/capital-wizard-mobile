@@ -9,9 +9,9 @@ import UIKit
 
 class ApplicationCenter: NSObject, Application {
     var id:       String   = "app-center"
-    var name:     String   = "Application Center"
-    var tabIcon:  UIImage? = UIImage(systemName: "magnifyingglass")
-    var bigIcon:  UIImage? = UIImage(systemName: "magnifyingglass")?.withRenderingMode(.alwaysTemplate)
+    var name:     String   = "More"
+    var tabIcon:  UIImage? = UIImage(systemName: "ellipsis.circle")
+    var bigIcon:  UIImage? = UIImage(systemName: "ellipsis.circle")?.withRenderingMode(.alwaysTemplate)
     var tagIndex: Int      = -1
 
     var sideBarPriority:  Priority = .baseApplication
@@ -65,27 +65,18 @@ class ApplicationCenter: NSObject, Application {
         guard let appStore = applicationService?.appStore else {
             return
         }
-        
+
         var applications: Array<Application> = []
-        
-        if let assetsData = appStore.getAppData(for: "assets") {
-            var assets: Application = WebViewApplication(appData: assetsData, hasNavigationBar: false, tagIndex: applicationsAmount)
-            applicationService?.addApplication(application: &assets, tag: applicationsAmount, shouldAddTab: false)
-            applications.append(assets)
+
+        let dynamicAppIds = ["assets", "profile", "settings"]
+        for appId in dynamicAppIds {
+            if let appData = appStore.getAppData(for: appId) {
+                var app: Application = WebViewApplication(appData: appData, hasNavigationBar: false, tagIndex: applicationsAmount)
+                applicationService?.addApplication(application: &app, tag: applicationsAmount, shouldAddTab: false)
+                applications.append(app)
+            }
         }
-        
-        if let peopleData = appStore.getAppData(for: "people") {
-            var people: Application = WebViewApplication(appData: peopleData, hasNavigationBar: false, tagIndex: applicationsAmount)
-            applicationService?.addApplication(application: &people, tag: applicationsAmount, shouldAddTab: false)
-            applications.append(people)
-        }
-        
-        if let settingsData = appStore.getAppData(for: "settings") {
-            var settings: Application = WebViewApplication(appData: settingsData, hasNavigationBar: false, tagIndex: applicationsAmount)
-            applicationService?.addApplication(application: &settings, tag: applicationsAmount, shouldAddTab: false)
-            applications.append(settings)
-        }
-        
+
         appCenterController?.data = applications
     }
 

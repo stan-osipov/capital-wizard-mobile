@@ -80,26 +80,6 @@ class ApplicationStore: NSObject {
     
     func initialLoad() {
         // (Roman) TODO: Load from server
-        
-        let profileIcon    = UIImage(systemName: "house")
-        let profileBigIcon = UIImage(named: "house")?.withRenderingMode(.alwaysTemplate)
-        var profile        = ApplicationData(id: "profile",
-                                             name: "Organizations",
-                                             tabIcon: profileIcon,
-                                             bigIcon: profileBigIcon,
-                                             apiName: "",
-                                             baseUrl: "profile")
-        profile.sidebarPriority = .baseApplication
-
-        let homeIcon    = UIImage(named: "icon_iframe_network_board_valu_portal_w")
-        let homeBigIcon = UIImage(named: "icon_iframe_network_board_valu_portal_w")?.withRenderingMode(.alwaysTemplate)
-        var home        = ApplicationData(id: "iframe_network_board_valu",
-                                          name: "Portal",
-                                          tabIcon: homeIcon,
-                                          bigIcon: homeBigIcon,
-                                          apiName: "",
-                                          baseUrl: "https://portal.valu-social.com/")
-        home.type   = .iFrameWeb
 
         let dashboardIcon    = UIImage(systemName: "rectangle.grid.2x2")
         let dashboardBigIcon = UIImage(systemName: "rectangle.grid.2x2")?.withRenderingMode(.alwaysTemplate)
@@ -110,7 +90,7 @@ class ApplicationStore: NSObject {
                                                apiName: "",
                                                baseUrl: "dashboard")
         dashboard.sidebarPriority = .staticApplication
-        
+
         let transactionsIcon    = UIImage(systemName: "banknote")
         let transactionsBigIcon = UIImage(systemName: "banknote")?.withRenderingMode(.alwaysTemplate)
         var transactions        = ApplicationData(id: "transactions",
@@ -121,6 +101,16 @@ class ApplicationStore: NSObject {
                                                   baseUrl: "transactions")
         transactions.sidebarPriority = .staticApplication
 
+        let peopleIcon    = UIImage(systemName: "person.3")
+        let peopleBigIcon = UIImage(systemName: "person.3")?.withRenderingMode(.alwaysTemplate)
+        var people        = ApplicationData(id: "people",
+                                            name: "People",
+                                            tabIcon: peopleIcon,
+                                            bigIcon: peopleBigIcon,
+                                            apiName: "",
+                                            baseUrl: "people")
+        people.sidebarPriority = .staticApplication
+
         let assetsIcon    = UIImage(systemName: "briefcase")
         let assetsBigIcon = UIImage(systemName: "briefcase")?.withRenderingMode(.alwaysTemplate)
         let assets        = ApplicationData(id: "assets",
@@ -129,30 +119,31 @@ class ApplicationStore: NSObject {
                                             bigIcon: assetsBigIcon,
                                             apiName: "",
                                             baseUrl: "assets")
-        
-        let peopleIcon    = UIImage(systemName: "person.3")
-        let peopleBigIcon = UIImage(systemName: "person.3")?.withRenderingMode(.alwaysTemplate)
-        let people        = ApplicationData(id:"people",
-                                            name: "People",
-                                            tabIcon: peopleIcon,
-                                            bigIcon: peopleBigIcon,
-                                            apiName: "",
-                                            baseUrl: "people")
-        
+
+        let profileIcon    = UIImage(systemName: "person.crop.circle")
+        let profileBigIcon = UIImage(systemName: "person.crop.circle")?.withRenderingMode(.alwaysTemplate)
+        var profile        = ApplicationData(id: "profile",
+                                             name: "Profile",
+                                             tabIcon: profileIcon,
+                                             bigIcon: profileBigIcon,
+                                             apiName: "",
+                                             baseUrl: "profile")
+        profile.sidebarPriority = .dynamicApplication
+
         let settingsIcon    = UIImage(systemName: "gearshape")
         let settingsBigIcon = UIImage(systemName: "gearshape")?.withRenderingMode(.alwaysTemplate)
-        var settings        = ApplicationData(id: "settings",
-                                            name: "Settings",
-                                            tabIcon: settingsIcon,
-                                            bigIcon: settingsBigIcon,
-                                            apiName: "",
-                                            baseUrl: "settings")
+        let settings        = ApplicationData(id: "settings",
+                                              name: "Settings",
+                                              tabIcon: settingsIcon,
+                                              bigIcon: settingsBigIcon,
+                                              apiName: "",
+                                              baseUrl: "settings")
 
-        applications[profile.id]      = profile
         applications[dashboard.id]    = dashboard
         applications[transactions.id] = transactions
-        applications[assets.id]       = assets
         applications[people.id]       = people
+        applications[assets.id]       = assets
+        applications[profile.id]      = profile
         applications[settings.id]     = settings
     }
 }

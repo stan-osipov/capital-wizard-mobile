@@ -198,22 +198,37 @@ class ResetPasswordViewController: UIViewController {
     
     @objc private func sendResetTapped() {
         dismissKeyboard()
-        
+
         if emailField.text.isEmpty {
             emailField.showError("Email is required")
             return
         }
-        
+
         if !Validator.isValidEmail(emailField.text) {
             emailField.showError("Please enter a valid email address")
             return
         }
-        
+
         sendButton.startLoading()
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.sendButton.stopLoading()
-            self.showSuccessState()
+
+        guard let authService: AuthService = ServiceManager.shared.getService() else {
+            sendButton.stopLoading()
+            return
+        }
+
+        Task {
+            do {
+                try await authService.client.resetPasswordForEmail(emailField.text)
+                await MainActor.run {
+                    sendButton.stopLoading()
+                    showSuccessState()
+                }
+            } catch {
+                await MainActor.run {
+                    sendButton.stopLoading()
+                    emailField.showError(error.localizedDescription)
+                }
+            }
         }
     }
     

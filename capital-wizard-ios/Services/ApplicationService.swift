@@ -110,16 +110,7 @@ class ApplicationService: Service {
     private var applications: Dictionary<String, Application> = [:]
     private lazy var windowsService: WindowsService?  = ServiceManager.shared.getService()
 
-    static let defaultAppAmount = 4
-
-    var applicationsAmount = 0
-    var appStore: ApplicationStore
-
-    private var appCenter: ApplicationCenter?
-
     init() {
-        self.appStore = ApplicationStore()
-
         /// Subscribe to auth events.
         /// We start applications when user login and stop them at logout.
         let authService: AuthService? = ServiceManager.shared.getService()
@@ -128,179 +119,36 @@ class ApplicationService: Service {
     }
 
     func startApplications() {
-        windowsService?.applicationsDelegate = self
-        
-        if let profileData = appStore.getAppData(for: "profile") {
-            var profile: Application = WebViewApplication(appData: profileData, hasNavigationBar: false, tagIndex: applicationsAmount)
-            addApplication(application: &profile, tag: applicationsAmount)
-        }
+        // Single WebView loading the root URL — the web app handles its own navigation
+        let appData = ApplicationData(id: "main", name: "Capital Wizard", apiName: "", baseUrl: "")
+        let mainApp = WebViewApplication(appData: appData, hasNavigationBar: false, tagIndex: 0)
+        mainApp.awake()
+        mainApp.start()
+        applications[mainApp.id] = mainApp
 
-        if let dashboardData = appStore.getAppData(for: "dashboard") {
-            var dashboard: Application = WebViewApplication(appData: dashboardData, hasNavigationBar: false, tagIndex: applicationsAmount)
-            addApplication(application: &dashboard, tag: applicationsAmount)
-        }
-        
-        if let transactionsData = appStore.getAppData(for: "transactions") {
-            var transactions: Application = WebViewApplication(appData: transactionsData, hasNavigationBar: false, tagIndex: applicationsAmount)
-            addApplication(application: &transactions, tag: applicationsAmount)
-        }
-        
-        var appCenter: ApplicationCenter = ApplicationCenter()
-        addApplication(application: &appCenter, tag: applicationsAmount)
-        self.appCenter = appCenter
-        appStore.applications[appCenter.id] = ApplicationData(application: appCenter)
-        
-        appCenter.startDynamiccApplications()
-
-        if let profile = getApplication(id: "profile") {
-            switchTo(application: profile)
-        } else {
-            switchTo(application: appCenter)
+        // Present the WebView full-screen
+        if let controller = mainApp.controller {
+            windowsService?.mainController = controller
         }
 
         onApplicationsDidStart.invoke(())
     }
 
     func stopAndClearApplications() {
-        windowsService?.applicationsDelegate = nil
-
-        applications.values.forEach { application in
-            application.stop()
-        }
-        windowsService?.removeAllTabBars()
+        applications.values.forEach { $0.stop() }
         applications.removeAll()
+        windowsService?.mainController = nil
 
-        applicationsAmount = .zero
+        // Clear WebView cookies and cache on logout
+        WebViewApplication.cleareAllData()
     }
 
-    func addApplication<T: Application>(application: inout T, tag: Int, shouldAddTab: Bool = true, isColored: Bool = false) {
-        application.awake()
+    // MARK: - Stubs (kept so unused files compile)
 
-        if let controller = application.controller {
-            if let tabBarItem = windowsService?.createTabController(hideNavigationBar: !application.hasNavigationBar,
-                                                                    with: application.name,
-                                                                    and: application.tabIcon,
-                                                                    tag: tag,
-                                                                    isColored: isColored,
-                                                                    vc: controller) {
-                application.rootController = tabBarItem
-                application.tagIndex       = tag
-                if shouldAddTab {
-                    windowsService?.add(application: application)
-                }
-            }
-        }
-        applications[application.id] = application
-        applicationsAmount += 1
+    static let defaultAppAmount = 4
+    var applicationsAmount = 0
+    var appStore: ApplicationStore = ApplicationStore()
 
-        application.start()
-    }
-
-    func removeApplication(_ application: Application) {
-        application.stop()
-        applications.removeValue(forKey: application.id)
-        applicationsAmount -= 1
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            windowsService?.remove(application: application)
-        }
-    }
-}
-
-extension ApplicationService {
-    func getApplication(id: String) -> Application? {
-        return applications.values.first { $0.id == id }
-    }
-
-    private func showApplication(_ application: Application, with layout: ApplicationUILayout?) {
-        if application.tagIndex >= ApplicationService.defaultAppAmount {
-            appCenter?.showApplication(application)
-        }
-        windowsService?.show(application: application, with: layout)
-    }
-
-    func switchTo(application: Application, for path: WindowTransitionPath = .right) {
-        showApplication(application, with: application.layout)
-    }
-}
-
-extension ApplicationService: ApplicationsWindowsServiceDelegate {
-    private func getApplication(byTag tag: Int) -> Application? {
-        return applications.values.first { $0.tagIndex == tag }
-    }
-
-    private func pause(applications: Array<Application?>) {
-        applications.forEach { application in
-            application?.pause()
-        }
-    }
-
-    private func resume(application: Application?, layout: ApplicationUILayout?) {
-        application?.resume(layout: layout)
-    }
-
-    func onLayoutChanged(to layout: ViewUILayout, deSelected: Array<String>) {
-        let deSelected = deSelected.map( { getApplication(id: $0 ) })
-        pause(applications: deSelected)
-
-        var selected: Array<Application?> = []
-
-        switch layout {
-        case .split(let left, let right):
-            if let left = left {
-                let application = getApplication(id: left.id)
-                resume(application: application, layout: .left)
-                selected.append(application)
-            }
-            if let right = right {
-                let application = getApplication(id: right.id)
-                resume(application: application, layout: .right)
-
-                selected.append(application)
-            }
-        case .wide(let barItem):
-            let application = getApplication(id: barItem.id)
-            resume(application: application, layout: .wide)
-
-            selected.append(application)
-        case .none:
-            return
-        }
-
-        appCenter?.setSelected(applications: selected)
-    }
-
-    func onCloseApplication(id: String, layout: ViewUILayout) {
-        let application = getApplication(id: id)
-
-        if let application = application, application.sideBarPriority == .dynamicApplication {
-            appCenter?.hideApplication(application)
-        }
-
-        switch layout {
-        case .wide(let item):
-            guard item.id == id else {
-                return
-            }
-
-            guard let appCenter = appCenter else {
-                return
-            }
-            showApplication(appCenter, with: .wide)
-        case .split(left: let left, right: let right):
-            if let left = left, left.id == id, let right = right {
-                guard let application = getApplication(id: right.id) else {
-                    return
-                }
-                showApplication(application, with: .wide)
-            }
-            if let right = right, right.id == id, let left = left{
-                guard let application = getApplication(id: left.id) else {
-                    return
-                }
-                showApplication(application, with: .wide)
-            }
-        default:
-            break
-        }
-    }
+    func addApplication<T: Application>(application: inout T, tag: Int, shouldAddTab: Bool = true, isColored: Bool = false) {}
+    func switchTo(application: Application, for path: WindowTransitionPath = .right) {}
 }

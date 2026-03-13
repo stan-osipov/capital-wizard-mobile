@@ -9,7 +9,8 @@ import UIKit
 
 class ProfilePopoverController: UIViewController {
 
-    private lazy var authService: AuthService? = ServiceManager.shared.getService()
+    private lazy var authService:   AuthService?   = ServiceManager.shared.getService()
+    private lazy var windowService: WindowsService? = ServiceManager.shared.getService()
 
     private let colorScheme: ColorScheme
 
@@ -45,6 +46,7 @@ class ProfilePopoverController: UIViewController {
 
         let segmentedControl = UISegmentedControl(items: ["Light", "Dark", "System"])
         segmentedControl.selectedSegmentIndex = segmentIndex(for: colorScheme)
+        segmentedControl.addTarget(self, action: #selector(colorSchemeChanged(_:)), for: .valueChanged)
         segmentedControl.translatesAutoresizingMaskIntoConstraints = false
 
         let separator = UIView()
@@ -92,6 +94,18 @@ class ProfilePopoverController: UIViewController {
         case .dark:                     return 1
         case .systemLight, .systemDark: return 2
         }
+    }
+
+    @objc private func colorSchemeChanged(_ sender: UISegmentedControl) {
+        let scheme: ColorScheme
+        switch sender.selectedSegmentIndex {
+        case 0:  scheme = .light
+        case 1:  scheme = .dark
+        default:
+            let isDark = traitCollection.userInterfaceStyle == .dark
+            scheme = isDark ? .systemDark : .systemLight
+        }
+        windowService?.updateColorScheme(to: scheme)
     }
 
     @objc private func logoutTapped() {

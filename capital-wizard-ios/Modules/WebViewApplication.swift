@@ -9,8 +9,11 @@ import WebKit
 
 struct WebViewApplicationConst {
     static let baseUrlKey = "applicationBaseUrl"
-    static let applicationBaseUrl    = "http://192.168.0.118:3005/"
+    static let applicationBaseUrl    = "https://capital-wizard.com/"
     static let contentControllerName = "iosCW"
+
+    /// Shared process pool so all WebViews share cookies and sessions.
+    static let sharedProcessPool = WKProcessPool()
 }
 
 class WebViewApplication: NSObject, Application {
@@ -41,7 +44,8 @@ class WebViewApplication: NSObject, Application {
     lazy var windowsService:       WindowsService?       = ServiceManager.shared.getService()
     lazy var applicationService:   ApplicationService?   = ServiceManager.shared.getService()
 
-    private lazy var onColorChangeHandler:   EventCallback   = EventCallback(onColorSchemeChanged(_:))
+    private lazy var onColorChangeHandler: EventCallback = EventCallback(onColorSchemeChanged(_:))
+    private lazy var onAppReadyHandler:    EventCallback = EventCallback(onAppReady)
 
     init(appData: ApplicationData, hasNavigationBar: Bool, tagIndex: Int) {
         self.appData            = appData
@@ -70,6 +74,13 @@ class WebViewApplication: NSObject, Application {
     
     func start() {
         windowsService?.onColorSchemeChanged += onColorChangeHandler
+        webViewCommunication.onAppReady += onAppReadyHandler
+    }
+
+    private func onAppReady() {
+        DispatchQueue.main.async { [weak self] in
+            self?.webViewController?.revealWebView()
+        }
     }
     
     func stop() {
@@ -81,6 +92,7 @@ class WebViewApplication: NSObject, Application {
         }
         
         windowsService?.onColorSchemeChanged -= onColorChangeHandler
+        webViewCommunication.onAppReady -= onAppReadyHandler
         
         let notificationCenter = NotificationCenter.default
         notificationCenter.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
@@ -147,7 +159,7 @@ extension WebViewApplication: UrlFactory {
             throw WebViewError(message: "Couldn't create url from \(stringUrl)")
         }
         
-        print("[BUG] \(url)")
+        print("[WebView] Loading: \(url)")
         return url
     }
     

@@ -168,17 +168,21 @@ extension TabBarController: UITabBarControllerDelegate {
         guard let item = items.first(where: { $0.vc.tabBarItem.tag ==  selected}) else {
             return
         }
-        
+
         var deSelected: Array<String> = []
         if let id = items.first(where: { $0.vc.tabBarItem.tag == currentSelectedTabTag })?.id {
             deSelected.append(id)
         }
-        
+
         dockingDelegate?.onLayoutChanged(to: .wide(item), deSelected: deSelected)
-        
+
         currentSelectedTabTag = selected
         customTabBar.updateSelected(index: currentSelectedTabTag)
-        
+
+        // Haptic feedback on tab switch
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+
         guard let tabBarItems = customTabBar.subviews
                 .filter({ $0 is UIControl }) as? [UIControl],
               let index = tabBarController.viewControllers?.firstIndex(of: viewController),

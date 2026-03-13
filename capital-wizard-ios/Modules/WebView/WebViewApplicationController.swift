@@ -14,17 +14,17 @@ protocol WebViewControllerDelegate: AnyObject {
 }
 
 class WebViewApplicationController: ApplicationViewController {
-    
+
     enum RefreshingState {
         case start
         case onReleaseFinger
         case cancel
     }
-    
+
     private var wkWebView: WKWebView?
-    
+
     var onLoadedEvent: Event<Void> = Event()
-    
+
     var webViewDidLoaded: Bool   = false
     var appType: ApplicationType = .web
     var id:      String          = ""
@@ -32,11 +32,11 @@ class WebViewApplicationController: ApplicationViewController {
     var contentController: WKUserContentController?
     weak var urlFactory:   UrlFactory?
     weak var delegate:     WebViewControllerDelegate?
-    
-    private var preloader:      Preloader?
+
+    private var splashView:     UIView?
     private var refreshControl: UIRefreshControl?
-    private var menuTapTarget:  UIView?
-    
+    private var readyTimeoutWork: DispatchWorkItem?
+
     private lazy var windowsService: WindowsService? = ServiceManager.shared.getService()
     private var isDarkMode: Bool {
         windowsService?.colorScheme.isDarkMode ?? false
@@ -44,21 +44,12 @@ class WebViewApplicationController: ApplicationViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        let preloader  = Preloader(in: view)
-        self.preloader = preloader
-        self.view.addSubview(preloader)
-        
         createWkWebView(withPreloader: true)
     }
-    
+
     func createWkWebView(withPreloader hasPreloader: Bool = false) {
         guard let contentController = contentController else {
             return
-        }
-
-        if hasPreloader {
-            preloader?.show()
         }
 
         let config = WKWebViewConfiguration()
@@ -66,7 +57,7 @@ class WebViewApplicationController: ApplicationViewController {
         config.userContentController = contentController
         config.userContentController.addUserScript(self.getNativeAppScript())
         config.userContentController.addUserScript(self.getZoomDisableScript())
-        
+
         let wkWebView = WKWebView(frame: self.view.frame, configuration: config)
         wkWebView.uiDelegate = self
         wkWebView.navigationDelegate = self
@@ -77,58 +68,105 @@ class WebViewApplicationController: ApplicationViewController {
         }
 
         delegate?.willStartLoad(wkWebView: wkWebView)
-        
+
         let scheme = windowsService?.colorScheme ?? .light
-        
-        wkWebView.scrollView.delegate = self
-        wkWebView.scrollView.bounces  = true
-        
+
+        wkWebView.scrollView.bounces      = true
+        wkWebView.scrollView.scrollsToTop = false
+
         let refreshControl  = UIRefreshControl()
         self.refreshControl = refreshControl
-        
+
         let attributes: [NSAttributedString.Key: Any] = [
             .foregroundColor: UIColor.gray,
             .font: UIFont.systemFont(ofSize: 14)
         ]
         let attributedTitle = NSAttributedString(string: "Pull to Refresh", attributes: attributes)
         refreshControl.attributedTitle = attributedTitle
-        
+
         refreshControl.addTarget(self, action: #selector(reloadWebView(_:)), for: .valueChanged)
 
         wkWebView.scrollView.refreshControl = refreshControl
-        
-        setupView(for: wkWebView, colorScheme: scheme, withPreloader: hasPreloader)
-        setupMenuTapTarget()
+
+        setupView(for: wkWebView, colorScheme: scheme)
+
+        if hasPreloader {
+            showSplash(scheme: scheme)
+        }
 
         self.wkWebView = wkWebView
         initialLoad()
     }
 
-    private func setupMenuTapTarget() {
-        let tap = UIView()
-        tap.translatesAutoresizingMaskIntoConstraints = false
-        tap.backgroundColor = .clear
-        view.addSubview(tap)
+    // MARK: - Splash
+
+    private func showSplash(scheme: ColorScheme) {
+        splashView?.removeFromSuperview()
+
+        let splash = SplashAnimationView()
+        splash.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(splash)
 
         NSLayoutConstraint.activate([
-            tap.topAnchor.constraint(equalTo: view.topAnchor),
-            tap.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tap.widthAnchor.constraint(equalToConstant: 60),
-            tap.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 44)
+            splash.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            splash.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            splash.topAnchor.constraint(equalTo: view.topAnchor),
+            splash.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        let gesture = UITapGestureRecognizer(target: self, action: #selector(menuTapTargetTapped))
-        tap.addGestureRecognizer(gesture)
+        splashView = splash
 
-        menuTapTarget = tap
+        // Timeout fallback
+        let timeout = DispatchWorkItem { [weak self] in
+            self?.revealWebView()
+        }
+        readyTimeoutWork = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
     }
 
-    @objc private func menuTapTargetTapped() {
-        Task { @MainActor in
-            _ = try? await wkWebView?.evaluateJavaScript("window.__capital_wizard.openMenu()")
+    func revealWebView() {
+        readyTimeoutWork?.cancel()
+        readyTimeoutWork = nil
+
+        guard let splash = splashView as? SplashAnimationView else {
+            splashView?.removeFromSuperview()
+            splashView = nil
+            return
+        }
+
+        // Ensure at least 1.5s of animation plays before dismissing
+        let elapsed = CACurrentMediaTime() - splash.createdAt
+        let minDisplay: CFTimeInterval = 1.5
+        let remaining = max(0, minDisplay - elapsed)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + remaining) { [weak self] in
+            guard let self = self, self.splashView != nil else { return }
+
+            // Prepare WebView for reveal: start slightly scaled down and transparent
+            if let webView = self.wkWebView {
+                webView.alpha = 0
+                webView.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
+            }
+
+            // Animations keep running during fade — no freeze frame
+            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+                splash.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
+                splash.alpha = 0
+            }, completion: { _ in
+                splash.stopAllAnimations()
+                splash.removeFromSuperview()
+                self.splashView = nil
+            })
+
+            UIView.animate(withDuration: 0.45, delay: 0.1, options: .curveEaseOut, animations: {
+                self.wkWebView?.alpha = 1
+                self.wkWebView?.transform = .identity
+            })
         }
     }
-    
+
+    // MARK: - WebView setup
+
     func initialLoad() {
         guard let wkWebView = wkWebView else {
             createWkWebView()
@@ -151,15 +189,15 @@ class WebViewApplicationController: ApplicationViewController {
             }
         }
     }
-    
-    private func setupView(for webView: WKWebView, colorScheme scheme: ColorScheme, withPreloader hasPreloader: Bool) {
+
+    private func setupView(for webView: WKWebView, colorScheme scheme: ColorScheme) {
         let color  = AppColors(scheme: scheme)
         view.backgroundColor = color.backgroundColor
 
         if appType == .web {
             webView.scrollView.backgroundColor = color.backgroundColor
         }
-        
+
         webView.backgroundColor = .clear
 
         view.addSubview(webView)
@@ -169,12 +207,8 @@ class WebViewApplicationController: ApplicationViewController {
         webView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor).isActive = true
         webView.topAnchor.constraint(equalTo: view.topAnchor).isActive = true
         webView.bottomAnchor.constraint(equalTo: view.bottomAnchor).isActive = true
-        
-        if let preloader = preloader, hasPreloader {
-            view.bringSubviewToFront(preloader)
-        }
     }
-    
+
     private func getNativeAppScript() -> WKUserScript {
         let source = """
         window.__capital_wizard_native = { platform: 'ios' };
@@ -191,12 +225,12 @@ class WebViewApplicationController: ApplicationViewController {
             "var head = document.getElementsByTagName('head')[0];" + "head.appendChild(meta);"
         return WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
     }
-    
+
     @objc private func reloadWebView(_ sender: UIRefreshControl) {
         webViewDidLoaded = false
         wkWebView?.reloadFromOrigin()
     }
-    
+
     func updateColorScheme(_ scheme: ColorScheme) {
         let color  = AppColors(scheme: scheme)
         view.backgroundColor = color.backgroundColor
@@ -205,8 +239,12 @@ class WebViewApplicationController: ApplicationViewController {
             wkWebView?.scrollView.backgroundColor = color.backgroundColor
         }
     }
-    
+
     func hideWebView() {
+        readyTimeoutWork?.cancel()
+        readyTimeoutWork = nil
+        splashView?.removeFromSuperview()
+        splashView = nil
         refreshControl?.removeTarget(self, action: #selector(reloadWebView(_:)), for: .valueChanged)
         refreshControl = nil
         wkWebView?.stopLoading()
@@ -217,11 +255,11 @@ class WebViewApplicationController: ApplicationViewController {
         wkWebView?.configuration.userContentController.removeAllScriptMessageHandlers()
         wkWebView = nil
     }
-    
+
     func send(json: String) async throws -> Any? {
         try await wkWebView?.evaluateJavaScript(json)
     }
-    
+
     func reload(with url: URL? = nil) {
         webViewDidLoaded = false
         if let url = url {
@@ -231,14 +269,12 @@ class WebViewApplicationController: ApplicationViewController {
         }
         wkWebView?.reload()
     }
-    
+
     func hardRealod() {
         wkWebView?.reloadFromOrigin()
     }
 }
 
-extension WebViewApplicationController: UIScrollViewDelegate {
-}
 extension WebViewApplicationController: WKUIDelegate {
     func webView(_ webView: WKWebView,
                  createWebViewWith configuration: WKWebViewConfiguration,
@@ -261,7 +297,6 @@ extension WebViewApplicationController: WKUIDelegate {
 
 extension WebViewApplicationController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        preloader?.hide()
         webViewDidLoaded = true
         onLoadedEvent.invoke(())
         guard let scrollView = wkWebView?.scrollView else {
@@ -293,7 +328,6 @@ extension WebViewApplicationController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        preloader?.hide()
         refreshControl?.endRefreshing()
     }
 

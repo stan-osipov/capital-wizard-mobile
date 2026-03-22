@@ -74,7 +74,8 @@ class AuthService: NSObject, Service {
     func signInWithGoogle() async throws {
         session = try await client.signInWithOAuth(
             provider: .google,
-            redirectTo: AuthService.redirectURL
+            redirectTo: AuthService.redirectURL,
+            queryParams: [("prompt", "select_account")]
         )
         isLoggedIn = true
         await MainActor.run {
@@ -83,7 +84,9 @@ class AuthService: NSObject, Service {
     }
 
     func signOut() async throws {
-        try await client.signOut()
+        // Ignore server-side error — the web app may have already invalidated the session.
+        // Always clear local state and notify subscribers regardless.
+        try? await client.signOut()
         session = nil
         isLoggedIn = false
         await MainActor.run {

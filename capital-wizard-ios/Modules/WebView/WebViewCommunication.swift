@@ -114,5 +114,12 @@ extension WebViewCommunication: WKScriptMessageHandler {
         if eventName == "app-ready" {
             onAppReady.invoke(())
         }
+
+        if eventName == "logout" {
+            Task {
+                let authService: AuthService? = ServiceManager.shared.getService()
+                try? await authService?.signOut()
+            }
+        }
     }
 }

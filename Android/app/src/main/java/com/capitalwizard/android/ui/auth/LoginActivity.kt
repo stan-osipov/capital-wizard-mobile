@@ -1,7 +1,6 @@
 package com.capitalwizard.android.ui.auth
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
@@ -69,7 +68,7 @@ class LoginActivity : AppCompatActivity() {
 
     private fun handleIntent(intent: Intent?) {
         val uri = intent?.data ?: return
-        if (uri.scheme == "capital-wizard-android" && uri.host == "auth") {
+        if (uri.scheme == "capital-wizard-android") {
             authService?.handleDeepLink(uri)
         }
     }

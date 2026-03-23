@@ -1,6 +1,7 @@
 package com.capitalwizard.android.services
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import com.capitalwizard.android.utils.Event
 import com.capitalwizard.android.utils.EventCallback
@@ -95,9 +96,10 @@ class AuthService(private val context: Context) {
     }
 
     fun handleDeepLink(uri: Uri) {
+        val code = uri.getQueryParameter("code") ?: return
         scope.launch {
             try {
-                auth.parseFragmentAndImportSession(uri)
+                auth.exchangeCodeForSession(code)
             } catch (e: Exception) {
                 e.printStackTrace()
             }

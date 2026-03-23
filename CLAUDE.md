@@ -93,35 +93,56 @@ cd Android && ./gradlew test
 cd Android && ./gradlew installDebug
 ```
 
-**Dependencies:** Supabase Kotlin SDK, Ktor (HTTP client), Credential Manager (Google Sign-In).
+**Namespace:** `com.capitalwizard.android`
+**Target/Compile SDK:** 35 (Android 15) | **Min SDK:** 26 (Android 8.0) | **Java/Kotlin:** 17
+
+**Dependencies:** Supabase Kotlin SDK (BOM 3.1.1), Ktor 3.0.3 (HTTP client), Credential Manager 1.5.0-beta01 (Google Sign-In), AndroidX (AppCompat, Material, Lifecycle, WebKit, Splashscreen).
+
+**Build config:** Version catalog at `gradle/libs.versions.toml`. ViewBinding enabled. Release builds use ProGuard minification + resource shrinking. ProGuard rules preserve Supabase, Ktor, Kotlinx Serialization, and `@JavascriptInterface` methods.
 
 ### Core Flow
 
 ```
-CapitalWizardApp (registers services) → MainActivity (checks auth state)
-  → AuthService.tryRestoreSession() (checks existing Supabase session)
+CapitalWizardApp (registers AuthService in ServiceManager)
+  → LoginActivity (splash screen, checks auth state via onLogin event)
+  → AuthService.tryRestoreSession() (Supabase session auto-restore via sessionStatus flow)
   → On login: navigates to WebViewActivity → WebViewBridge injects tokens
-  → WebViewBridge injects tokens via window.__capital_wizard.auth(data)
+  → WebViewBridge injects tokens via JS property getter before page load
+  → Web app signals "app-ready" → splash overlay fades out
 ```
 
 ### Service Layer (`Android/.../services/`)
 
 Uses **Service Locator pattern** via `ServiceManager` singleton. Same pattern as iOS.
 
-- **AuthService** — Supabase Auth (email/password, Google OAuth). Publishes `onLogin`/`onLogout` events. Deep link scheme: `capital-wizard-android://auth/callback`.
+- **AuthService** — Supabase Auth (email/password, Google OAuth via PKCE). Publishes `onLogin`/`onLogout` events. Deep link scheme: `capital-wizard-android://auth/callback`. Session status observed via `auth.sessionStatus` coroutine flow. Coroutine scope: `SupervisorJob() + Dispatchers.Main`.
 
 ### Event System (`Android/.../utils/Event.kt`)
 
-Same C#-style observer pattern as iOS. `Event<T>` with `subscribe`/`unsubscribe` and `invoke()`.
+Same C#-style observer pattern as iOS. `Event<T>` with `subscribe`/`unsubscribe` and `+=`/`-=` operators. `EventCallback<T>` wraps listener functions.
 
-### Web-Native Bridge (`Android/.../webview/`)
+### Web-Native Bridge (`Android/.../webview/WebViewBridge.kt`)
 
-- **Native → Web:** Token injection via `evaluateJavascript()`
-- **Web → Native:** `@JavascriptInterface` on `"androidCW"` channel, JSON message parsing
-- Same `window.__capital_wizard.auth(data)` / `window.__capital_wizard.system(data)` protocol as iOS
+- **Native → Web:** Token injection via JS property getter (`injectAuthScript()`), native identifier via `window.__capital_wizard_native = { platform: 'android' }`
+- **Web → Native:** `@JavascriptInterface` on `"androidCW"` channel, JSON message parsing with `type` field
+- **Message types:** `"system"` (api-ready, app-ready, logout), `"auth"`
+- **Base URL:** `https://capital-wizard.com/`
+- Splash reveal triggered by `"app-ready"` event with 15s timeout fallback
 
 ### UI (`Android/.../ui/`)
 
-- **Auth screens:** `LoginActivity` with email/password and Google sign-in
-- **WebView:** `WebViewActivity` — full-screen WebView with pull-to-refresh, splash screen
-- **Theme:** Dark theme matching iOS dark mode colors
+- **Auth screens:** `LoginActivity` with email/password, Google OAuth, splash screen (1.5s delay), email confirmation flow. Deep link handling for OAuth callbacks.
+- **WebView:** `WebViewActivity` — full-screen WebView with pull-to-refresh (`SwipeRefreshLayout`), splash overlay animation (fade-out + scale), edge-to-edge layout with `WindowInsets`, back button WebView navigation, external links open in system browser, crash recovery via `RenderProcessGone`.
+- **Theme:** Dark theme matching iOS (Material Components DayNight NoActionBar), transparent status/nav bars, custom splash theme.
+- **All layouts are XML** with ViewBinding (`activity_login.xml`, `activity_webview.xml`)
+
+### Android Manifest
+
+- `INTERNET` permission
+- `LoginActivity` — launcher, exported, handles `capital-wizard-android://auth/callback` deep links
+- `WebViewActivity` — not exported, handles orientation + screen size config changes
+- Clear-text traffic disabled (HTTPS only)
+
+### Testing
+
+No tests currently exist. `AndroidJUnitRunner` is declared as test instrumentation runner in build config.

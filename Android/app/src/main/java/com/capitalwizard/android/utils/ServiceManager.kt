@@ -2,7 +2,8 @@ package com.capitalwizard.android.utils
 
 object ServiceManager {
 
-    private val services = mutableListOf<Any>()
+    @PublishedApi
+    internal val services = mutableListOf<Any>()
 
     fun register(service: Any) {
         services.add(service)

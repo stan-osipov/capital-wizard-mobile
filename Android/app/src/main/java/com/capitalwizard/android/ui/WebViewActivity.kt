@@ -35,7 +35,7 @@ class WebViewActivity : AppCompatActivity() {
     private var authService: AuthService? = null
 
     private val onLogoutCallback = EventCallback<Unit> { navigateToLogin() }
-    private val onAppReadyCallback = EventCallback<Unit> { revealWebView() }
+    private val onAppReadyCallback = EventCallback<Unit> { runOnUiThread { revealWebView() } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

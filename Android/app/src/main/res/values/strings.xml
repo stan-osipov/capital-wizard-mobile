@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Capital Wizard</string>
+    <string name="login_subtitle">Sign in to continue</string>
+    <string name="hint_email">Email</string>
+    <string name="hint_password">Password</string>
+    <string name="sign_in">Sign In</string>
+    <string name="sign_up">Create Account</string>
+    <string name="sign_in_google">Continue with Google</string>
+    <string name="error_empty_fields">Please fill in all fields</string>
+    <string name="error_sign_in">Sign in failed</string>
+    <string name="error_sign_up">Sign up failed</string>
+    <string name="sign_up_check_email">Check your email to confirm your account</string>
+</resources>

@@ -1,0 +1,44 @@
+[versions]
+agp = "8.7.3"
+kotlin = "2.1.0"
+coreKtx = "1.15.0"
+appcompat = "1.7.0"
+material = "1.12.0"
+activity = "1.9.3"
+constraintlayout = "2.2.0"
+swiperefreshlayout = "1.1.0"
+webkit = "1.12.1"
+supabase = "3.1.1"
+ktor = "3.0.3"
+serialization = "1.7.3"
+credentials = "1.5.0-beta01"
+googleid = "1.1.1"
+splashscreen = "1.0.1"
+lifecycle = "2.8.7"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-activity = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "swiperefreshlayout" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
+androidx-lifecycle-runtime = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
+supabase-gotrue = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+
+ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
+
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+
+credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+credentials-play = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
+googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

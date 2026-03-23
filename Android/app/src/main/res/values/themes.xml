@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.CapitalWizard" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/gradient_primary</item>
+        <item name="colorPrimaryVariant">@color/gradient_secondary</item>
+        <item name="colorOnPrimary">@color/text_primary</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorSurface">@color/card_background</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.CapitalWizard.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.CapitalWizard</item>
+    </style>
+
+</resources>

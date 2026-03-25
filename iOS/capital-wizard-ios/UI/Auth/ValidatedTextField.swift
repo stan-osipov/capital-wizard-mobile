@@ -49,6 +49,8 @@ class ValidatedTextField: UIView {
         textField.font = .systemFont(ofSize: 16)
         textField.autocapitalizationType = .none
         textField.autocorrectionType = .no
+        textField.textContentType = .init(rawValue: "")
+        textField.passwordRules = nil
         textField.translatesAutoresizingMaskIntoConstraints = false
         textField.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
         containerView.addSubview(textField)

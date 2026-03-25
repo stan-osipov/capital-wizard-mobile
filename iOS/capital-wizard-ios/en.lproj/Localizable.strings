@@ -1,0 +1,54 @@
+/* Login Screen */
+"login.title" = "Welcome Back";
+"login.subtitle" = "Enter your credentials to access your account";
+"login.forgot_password" = "Forgot password?";
+"login.button" = "Login";
+"login.divider" = "Or continue with";
+"login.google" = "Sign in with Google";
+"login.apple" = "Sign in with Apple";
+"login.no_account" = "Don't have an account?";
+"login.create_one" = "Create one";
+
+/* Sign Up Screen */
+"signup.title" = "Create your account";
+"signup.subtitle" = "Join thousands using our platform";
+"signup.password_hint" = "At least 8 characters";
+"signup.terms_agree" = "I agree to the Terms of Service and Privacy Policy";
+"signup.button" = "Create Account";
+"signup.divider" = "Or sign up with";
+"signup.google" = "Sign up with Google";
+"signup.apple" = "Sign up with Apple";
+"signup.have_account" = "Already have an account?";
+"signup.login_here" = "Login here";
+"signup.confirm_title" = "Check your email";
+"signup.confirm_description" = "We've sent a confirmation link to your email. Please verify your email and come back to log in.";
+"signup.back_to_login" = "Back to Login";
+
+/* Reset Password Screen */
+"reset.title" = "Reset password";
+"reset.subtitle" = "Enter your email and we'll send you a reset link.";
+"reset.button" = "Send reset link";
+"reset.back" = "Back to login";
+"reset.success_title" = "Check your inbox!";
+"reset.success_description" = "We've sent a password reset link to your email.";
+
+/* Shared Fields */
+"field.email" = "Email Address";
+"field.password" = "Password";
+"field.confirm_password" = "Confirm Password";
+
+/* Shared Labels */
+"terms.label" = "By continuing, you agree to our Terms of Service and Privacy Policy";
+"terms.word" = "Terms of Service";
+"terms.privacy_word" = "Privacy Policy";
+
+/* Validation Errors */
+"error.email_required" = "Email is required";
+"error.email_invalid" = "Please enter a valid email address";
+"error.password_required" = "Password is required";
+"error.password_short" = "Password must be at least 8 characters";
+"error.confirm_required" = "Please confirm your password";
+"error.passwords_mismatch" = "Passwords do not match";
+
+/* Language Picker */
+"language.cancel" = "Cancel";

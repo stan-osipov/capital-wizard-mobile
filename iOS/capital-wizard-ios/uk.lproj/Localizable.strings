@@ -1,0 +1,54 @@
+/* Login Screen */
+"login.title" = "З поверненням";
+"login.subtitle" = "Введіть свої дані для входу в обліковий запис";
+"login.forgot_password" = "Забули пароль?";
+"login.button" = "Увійти";
+"login.divider" = "Або продовжити через";
+"login.google" = "Увійти через Google";
+"login.apple" = "Увійти через Apple";
+"login.no_account" = "Немає облікового запису?";
+"login.create_one" = "Створити";
+
+/* Sign Up Screen */
+"signup.title" = "Створіть обліковий запис";
+"signup.subtitle" = "Приєднуйтесь до тисяч користувачів";
+"signup.password_hint" = "Мінімум 8 символів";
+"signup.terms_agree" = "Я погоджуюсь з Умовами використання та Політикою конфіденційності";
+"signup.button" = "Створити обліковий запис";
+"signup.divider" = "Або зареєструватись через";
+"signup.google" = "Зареєструватись через Google";
+"signup.apple" = "Зареєструватись через Apple";
+"signup.have_account" = "Вже маєте обліковий запис?";
+"signup.login_here" = "Увійти";
+"signup.confirm_title" = "Перевірте пошту";
+"signup.confirm_description" = "Ми надіслали посилання для підтвердження на вашу електронну пошту. Будь ласка, підтвердіть адресу та поверніться для входу.";
+"signup.back_to_login" = "Повернутись до входу";
+
+/* Reset Password Screen */
+"reset.title" = "Скинути пароль";
+"reset.subtitle" = "Введіть вашу електронну пошту і ми надішлемо посилання для скидання.";
+"reset.button" = "Надіслати посилання";
+"reset.back" = "Повернутись до входу";
+"reset.success_title" = "Перевірте вашу пошту!";
+"reset.success_description" = "Ми надіслали посилання для скидання пароля на вашу електронну пошту.";
+
+/* Shared Fields */
+"field.email" = "Електронна пошта";
+"field.password" = "Пароль";
+"field.confirm_password" = "Підтвердіть пароль";
+
+/* Shared Labels */
+"terms.label" = "Продовжуючи, ви погоджуєтесь з нашими Умовами використання та Політикою конфіденційності";
+"terms.word" = "Умовами використання";
+"terms.privacy_word" = "Політикою конфіденційності";
+
+/* Validation Errors */
+"error.email_required" = "Електронна пошта обов'язкова";
+"error.email_invalid" = "Будь ласка, введіть дійсну електронну адресу";
+"error.password_required" = "Пароль обов'язковий";
+"error.password_short" = "Пароль повинен містити мінімум 8 символів";
+"error.confirm_required" = "Будь ласка, підтвердіть ваш пароль";
+"error.passwords_mismatch" = "Паролі не збігаються";
+
+/* Language Picker */
+"language.cancel" = "Скасувати";

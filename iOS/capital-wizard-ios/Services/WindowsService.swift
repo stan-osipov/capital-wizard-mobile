@@ -165,7 +165,6 @@ class WindowsService: NSObject, Service {
     }
 
     func showLogin() {
-        if window.rootViewController is LoginViewController { return }
         window.rootViewController = LoginViewController()
     }
 

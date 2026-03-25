@@ -7,11 +7,12 @@
 
 import Foundation
 import Auth
+import AuthenticationServices
 
 class AuthService: NSObject, Service {
 
     let client: AuthClient
-    
+
     private var session: Session?
 
     var onLogin:  Event<Void> = Event()
@@ -20,6 +21,9 @@ class AuthService: NSObject, Service {
     private(set) var isLoggedIn: Bool = false
 
     private static let redirectURL = URL(string: "capital-wizard-ios://auth/callback")!
+
+    private var appleSignInContinuation: CheckedContinuation<Void, Error>?
+    private var appleSignInContextProvider: AppleSignInPresentationContext?
 
     override init() {
         client = AuthClient(configuration: .init(
@@ -36,11 +40,14 @@ class AuthService: NSObject, Service {
         Task {
             do {
                 session = try await client.session
+                _ = try await client.user()
                 isLoggedIn = true
                 await MainActor.run {
                     onLogin.invoke(())
                 }
             } catch {
+                try? await client.signOut()
+                session = nil
                 isLoggedIn = false
                 await MainActor.run {
                     onLogout.invoke(())
@@ -83,6 +90,28 @@ class AuthService: NSObject, Service {
         }
     }
 
+    @MainActor
+    func signInWithApple() async throws {
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
+        request.requestedScopes = [.email, .fullName]
+
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = scene.windows.first {
+            appleSignInContextProvider = AppleSignInPresentationContext(window: window)
+            controller.presentationContextProvider = appleSignInContextProvider
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            self.appleSignInContinuation = continuation
+            controller.performRequests()
+        }
+        appleSignInContextProvider = nil
+    }
+
     func signOut() async throws {
         // Ignore server-side error — the web app may have already invalidated the session.
         // Always clear local state and notify subscribers regardless.
@@ -109,5 +138,52 @@ class AuthService: NSObject, Service {
                 print(error)
             }
         }
+    }
+}
+
+// MARK: - Apple Sign In Delegate
+
+extension AuthService: ASAuthorizationControllerDelegate {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let identityTokenData = credential.identityToken,
+              let idToken = String(data: identityTokenData, encoding: .utf8) else {
+            appleSignInContinuation?.resume(throwing: NSError(domain: "AuthService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get Apple ID token"]))
+            appleSignInContinuation = nil
+            return
+        }
+
+        Task {
+            do {
+                session = try await client.signInWithIdToken(credentials: .init(provider: .apple, idToken: idToken))
+                isLoggedIn = true
+                await MainActor.run {
+                    onLogin.invoke(())
+                }
+                appleSignInContinuation?.resume()
+            } catch {
+                appleSignInContinuation?.resume(throwing: error)
+            }
+            appleSignInContinuation = nil
+        }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        appleSignInContinuation?.resume(throwing: error)
+        appleSignInContinuation = nil
+    }
+}
+
+// MARK: - Apple Sign In Presentation Context
+
+private class AppleSignInPresentationContext: NSObject, ASAuthorizationControllerPresentationContextProviding {
+    private let window: UIWindow
+
+    init(window: UIWindow) {
+        self.window = window
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        return window
     }
 }

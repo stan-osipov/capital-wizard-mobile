@@ -95,6 +95,7 @@ class WebViewApplicationController: ApplicationViewController {
         }
 
         self.wkWebView = wkWebView
+        removeInputAccessoryView()
         initialLoad()
     }
 
@@ -218,6 +219,33 @@ class WebViewApplicationController: ApplicationViewController {
     }
 
     // (Roman) TODO: Remove this. WebView should be able to adjust itself.
+    /// Remove the iOS form accessory bar (Previous/Next/Done toolbar) above the keyboard.
+    /// This is done by swizzling the `inputAccessoryView` on the inner WKContentView.
+    private func removeInputAccessoryView() {
+        guard let webView = wkWebView,
+              let contentView = webView.scrollView.subviews.first(where: {
+                  String(describing: type(of: $0)).hasPrefix("WKContentView")
+              }) else { return }
+
+        let noInputAccessoryViewClass: AnyClass = {
+            let className = "NoInputAccessoryView_\(UUID().uuidString.prefix(8))"
+            guard let baseClass = object_getClass(contentView) else { return type(of: contentView) }
+            let newClass: AnyClass = objc_allocateClassPair(baseClass, className, 0)!
+
+            let nilBlock: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+            let nilIMP = imp_implementationWithBlock(nilBlock)
+            let selector = #selector(getter: UIResponder.inputAccessoryView)
+            let method = class_getInstanceMethod(UIView.self, selector)!
+            let typeEncoding = method_getTypeEncoding(method)
+            class_addMethod(newClass, selector, nilIMP, typeEncoding)
+
+            objc_registerClassPair(newClass)
+            return newClass
+        }()
+
+        object_setClass(contentView, noInputAccessoryViewClass)
+    }
+
     private func getZoomDisableScript() -> WKUserScript {
         let source: String = "var meta = document.createElement('meta');" +
             "meta.name = 'viewport';" +

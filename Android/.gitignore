@@ -1,11 +1,33 @@
-*.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# Gradle / Android Studio
+.gradle/
+build/
+**/build/
 local.properties
-/app/build
+.idea/
+*.iml
+captures/
+.cxx/
+.externalNativeBuild/
+
+# Build outputs (стандартні і кастомні)
+*.aab
+*.apk
+*.ap_
+*.dex
+app/release/
+app/debug/
+
+# Keystore — НІКОЛИ не комітити
+*.jks
+*.keystore
+keystore.properties
+
+# ProGuard/R8
+mapping.txt
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

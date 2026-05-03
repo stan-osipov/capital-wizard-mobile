@@ -43,10 +43,10 @@ AppDelegate → AppManager (registers services) → SceneDelegate (sets up windo
 
 ### Service Layer (`iOS/capital-wizard-ios/Services/`)
 
-Uses **Service Locator pattern** via `ServiceManager.shared`. Services register at startup in `AppManager.init()`.
+Uses **Service Locator pattern** via `ServiceManager.shared`. `AuthService` and `ApplicationService` register in `AppManager.init()`; `WindowsService` registers in `SceneDelegate.scene(willConnectTo:)` (needs the live `UIWindow`). After registration, `AppManager.postInit()` calls `WindowsService.postInit()` then `AuthService.postInit()`.
 
-- **AuthService** — Supabase Auth (email/password, Google OAuth via PKCE). Publishes `onLogin`/`onLogout` events. OAuth callback URL scheme: `capital-wizard-ios://auth/callback`.
-- **ApplicationService** — Creates/manages `Application` instances. Currently instantiates a single `WebViewApplication`.
+- **AuthService** — Supabase Auth via `AuthClient` (PKCE flow, `KeychainLocalStorage`). Supports email/password, Google OAuth, and **Apple Sign In** (`ASAuthorizationAppleIDProvider`, exchanged with Supabase via `signInWithIdToken`). Publishes `onLogin`/`onLogout` events. OAuth callback URL scheme: `capital-wizard-ios://auth/callback` (handled by `SceneDelegate.scene(_:openURLContexts:)` → `AuthService.onOpenUrl`).
+- **ApplicationService** — Creates/manages `Application` instances. Currently instantiates `WebViewApplication` plus an `ApplicationCenter` "More" entry.
 - **WindowsService** — Window management, root VC transitions (auth ↔ main app), color scheme (dark/light/system) with persistence via UserDefaults.
 
 ### Event System (`iOS/capital-wizard-ios/Utils/Event.swift`)
@@ -62,7 +62,9 @@ C#-style observer pattern. Services communicate via `Event<T>` with `+=`/`-=` su
 
 ### Application Protocol (`iOS/capital-wizard-ios/Modules/`)
 
-`Application` protocol defines lifecycle: `awake()`, `start()`, `stop()`, `pause()`, `resume()`. Applications have priority levels (base/static/dynamic) and layout options (left/right/wide/background) designed for future multi-app and iPad split-view support. Currently only `WebViewApplication` is active.
+`Application` protocol defines lifecycle: `awake()`, `start()`, `stop()`, `pause()`, `resume()`. Applications have priority levels (base/static/dynamic) and layout options (left/right/wide/background) designed for future multi-app and iPad split-view support. Two implementations exist:
+- `WebViewApplication` — the primary content surface, loads `capital-wizard.com`.
+- `ApplicationCenter` (`Modules/ApplicationCenter/`) — a "More" tab that hosts an `ApplicationStore`, profile popover, and grid of installable apps. Mostly scaffolding for the future multi-app model; only the WebView app currently has real content.
 
 ### UI (`iOS/capital-wizard-ios/UI/`)
 
@@ -73,6 +75,7 @@ C#-style observer pattern. Services communicate via `Event<T>` with `+=`/`-=` su
 ### Utils
 
 - `ServiceManager` — singleton service registry with generic `register<T>`/`getService<T>`
+- `LocalizationManager` — singleton wrapping a per-language `Bundle` lookup. Supports English and Ukrainian (`en`, `uk`); auto-selects `uk` when device language starts with `uk` or region is `UA`. Selection persists in UserDefaults under `app_language`. Strings live in `*.lproj/Localizable.strings`.
 - `Validator` — email and password form validation
 - `Queue` — generic queue data structure
 

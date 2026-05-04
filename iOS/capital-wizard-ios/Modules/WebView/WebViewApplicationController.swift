@@ -51,6 +51,7 @@ class WebViewApplicationController: ApplicationViewController {
         guard let contentController = contentController else {
             return
         }
+        SplashAnimationView.postStatus("Creating browser…")
 
         let config = WKWebViewConfiguration()
         config.processPool = WebViewApplicationConst.sharedProcessPool
@@ -119,6 +120,7 @@ class WebViewApplicationController: ApplicationViewController {
 
         // Timeout fallback
         let timeout = DispatchWorkItem { [weak self] in
+            SplashAnimationView.postStatus("Timeout — revealing app")
             self?.revealWebView()
         }
         readyTimeoutWork = timeout
@@ -174,8 +176,10 @@ class WebViewApplicationController: ApplicationViewController {
             return
         }
         Task(priority: .high) {
+            SplashAnimationView.postStatus("Preparing auth…")
             await urlFactory?.prepareForInitialLoad()
             do {
+                SplashAnimationView.postStatus("Loading app…")
                 guard let url = try await urlFactory?.getInitialUrl() else {
                     throw WebViewError(message: "Could't get initial webView url.")
                 }
@@ -193,7 +197,9 @@ class WebViewApplicationController: ApplicationViewController {
 
     private func setupView(for webView: WKWebView, colorScheme scheme: ColorScheme) {
         let color  = AppColors(scheme: scheme)
-        view.backgroundColor = color.backgroundColor
+        // Use the keyboard-matching colour so the iOS keyboard's rounded
+        // corners blend in and the safe-area gap below the bottom row disappears.
+        view.backgroundColor = color.keyboardBackground
 
         if appType == .web {
             webView.scrollView.backgroundColor = color.backgroundColor
@@ -261,7 +267,7 @@ class WebViewApplicationController: ApplicationViewController {
 
     func updateColorScheme(_ scheme: ColorScheme) {
         let color  = AppColors(scheme: scheme)
-        view.backgroundColor = color.backgroundColor
+        view.backgroundColor = color.keyboardBackground
 
         if appType == .web {
             wkWebView?.scrollView.backgroundColor = color.backgroundColor
@@ -326,6 +332,7 @@ extension WebViewApplicationController: WKUIDelegate {
 extension WebViewApplicationController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         webViewDidLoaded = true
+        SplashAnimationView.postStatus("Waiting for app ready…")
         onLoadedEvent.invoke(())
         guard let scrollView = wkWebView?.scrollView else {
             return

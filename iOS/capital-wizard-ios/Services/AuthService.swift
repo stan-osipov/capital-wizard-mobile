@@ -39,13 +39,17 @@ class AuthService: NSObject, Service {
     func postInit() {
         Task {
             do {
+                SplashAnimationView.postStatus("Restoring session…")
                 session = try await client.session
+                SplashAnimationView.postStatus("Verifying account…")
                 _ = try await client.user()
                 isLoggedIn = true
+                SplashAnimationView.postStatus("Session restored")
                 await MainActor.run {
                     onLogin.invoke(())
                 }
             } catch {
+                SplashAnimationView.postStatus("No active session")
                 try? await client.signOut()
                 session = nil
                 isLoggedIn = false

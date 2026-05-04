@@ -24,7 +24,18 @@ class SplashAnimationView: UIView {
     private var orbitView2: UIView?
     private var iconView: UIView?
     private var titleLabel: UILabel?
+    private var statusLabel: UILabel?
     private var stopped = false
+
+    // MARK: - Status updates
+
+    static let statusNotification = Notification.Name("SplashStatusUpdate")
+
+    nonisolated static func postStatus(_ text: String) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: statusNotification, object: nil, userInfo: ["text": text])
+        }
+    }
 
     // MARK: - Init
 
@@ -267,6 +278,36 @@ class SplashAnimationView: UIView {
             title.topAnchor.constraint(equalTo: logoContainer.bottomAnchor, constant: 28),
             title.centerXAnchor.constraint(equalTo: centerXAnchor)
         ])
+
+        // ── Status label ──
+        let status = UILabel()
+        status.text = ""
+        status.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        status.textColor = UIColor.white.withAlphaComponent(0.35)
+        status.textAlignment = .center
+        status.numberOfLines = 1
+        status.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(status)
+        statusLabel = status
+
+        NSLayoutConstraint.activate([
+            status.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -48),
+            status.centerXAnchor.constraint(equalTo: centerXAnchor),
+            status.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
+            status.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24)
+        ])
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onStatusUpdate(_:)),
+            name: SplashAnimationView.statusNotification,
+            object: nil
+        )
+    }
+
+    @objc private func onStatusUpdate(_ notification: Notification) {
+        guard let text = notification.userInfo?["text"] as? String else { return }
+        statusLabel?.text = text
     }
 
     // MARK: - Apply animations (called when in window hierarchy)

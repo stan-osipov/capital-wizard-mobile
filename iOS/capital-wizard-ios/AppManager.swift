@@ -13,6 +13,8 @@ class AppManager {
     }
 
     func postInit() {
+        SplashAnimationView.postStatus("Initializing services…")
+
         let windowsService: WindowsService? = ServiceManager.shared.getService()
         windowsService?.postInit()
 

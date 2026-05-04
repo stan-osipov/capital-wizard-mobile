@@ -119,6 +119,8 @@ class ApplicationService: Service {
     }
 
     func startApplications() {
+        SplashAnimationView.postStatus("Starting application…")
+
         // Single WebView loading the root URL — the web app handles its own navigation
         let appData = ApplicationData(id: "main", name: "Capital Wizard", apiName: "", baseUrl: "")
         let mainApp = WebViewApplication(appData: appData, hasNavigationBar: false, tagIndex: 0)

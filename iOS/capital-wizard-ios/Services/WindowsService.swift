@@ -70,10 +70,16 @@ struct AppColors {
 
     var textPrimary     = UIColor.white
 
+    /// Colour behind the keyboard / bottom safe-area.  Matches the iOS
+    /// dark-mode keyboard backdrop so its rounded corners blend in and the
+    /// bottom row (`,` / `0` / `⌫`) no longer floats on a mismatched bg.
+    var keyboardBackground: UIColor
+
     init(scheme: ColorScheme) {
         if scheme.isDarkMode {
             blurEffect      = .dark
             backgroundColor = UIColor(red: 15/255,  green: 23/255,  blue: 42/255,  alpha: 1)
+            keyboardBackground = UIColor(red: 28/255, green: 28/255, blue: 30/255, alpha: 1) // systemGray6 dark
 
             separatorLine   = UIColor(red: 3/255,  green: 140/255, blue: 140/255, alpha: 1)
             tintColor       = .white
@@ -84,6 +90,7 @@ struct AppColors {
         } else {
             blurEffect      = .systemUltraThinMaterialLight
             backgroundColor = UIColor(red: 252/255, green: 254/255, blue: 255/255, alpha: 1)
+            keyboardBackground = UIColor(red: 209/255, green: 213/255, blue: 219/255, alpha: 1) // light keyboard bg
             separatorLine   = UIColor(red: 65/255,  green: 203/255, blue: 229/255, alpha: 1)
             tintColor       = .black
             unselectedColor = .black

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Animated splash mark: the ic_splash_w vector with its amber "line" path
+     drawn on once by the splash_w_draw animator. The faint "track" path stays
+     static underneath. Used as windowSplashScreenAnimatedIcon. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_splash_w">
+    <target
+        android:name="line"
+        android:animation="@animator/splash_w_draw" />
+</animated-vector>

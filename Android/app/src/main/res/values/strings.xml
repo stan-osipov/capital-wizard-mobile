@@ -1,14 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Capital Wizard</string>
-    <string name="login_subtitle">Sign in to continue</string>
-    <string name="hint_email">Email</string>
-    <string name="hint_password">Password</string>
-    <string name="sign_in">Sign In</string>
-    <string name="sign_up">Create Account</string>
-    <string name="sign_in_google">Continue with Google</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">Welcome Back</string>
+    <string name="login_subtitle">Enter your credentials to access your account</string>
+    <string name="login_forgot_password">Forgot password?</string>
+    <string name="login_button">Sign In</string>
+    <string name="login_divider">OR CONTINUE WITH</string>
+    <string name="login_google">Continue with Google</string>
+    <string name="login_no_account">Don\'t have an account?</string>
+    <string name="login_create_one">Create one</string>
+
+    <!-- Sign Up Screen -->
+    <string name="signup_title">Create your account</string>
+    <string name="signup_subtitle">Join thousands using our platform</string>
+    <string name="signup_password_hint">At least 8 characters</string>
+    <string name="signup_terms_agree">I agree to the Terms of Service and Privacy Policy</string>
+    <string name="signup_button">Create Account</string>
+    <string name="signup_divider">OR SIGN UP WITH</string>
+    <string name="signup_google">Sign up with Google</string>
+    <string name="signup_have_account">Already have an account?</string>
+    <string name="signup_login_here">Sign in</string>
+    <string name="signup_confirm_title">Check your email</string>
+    <string name="signup_confirm_description">We\'ve sent a confirmation link to your email. Please verify your email and come back to sign in.</string>
+    <string name="signup_back_to_login">Back to sign in</string>
+
+    <!-- Reset Password Screen -->
+    <string name="reset_title">Reset password</string>
+    <string name="reset_subtitle">Enter your email and we\'ll send you a reset link.</string>
+    <string name="reset_button">Send reset link</string>
+    <string name="reset_back">← Back to sign in</string>
+    <string name="reset_success_title">Check your inbox!</string>
+    <string name="reset_success_description">We\'ve sent a password reset link to your email.</string>
+
+    <!-- Shared Fields -->
+    <string name="field_email">Email Address</string>
+    <string name="field_password">Password</string>
+    <string name="field_confirm_password">Confirm Password</string>
+    <string name="hint_email_example">you@example.com</string>
+    <string name="hint_password_example">••••••••</string>
+
+    <!-- Shared Labels -->
+    <string name="terms_label">By continuing, you agree to our Terms of Service and Privacy Policy</string>
+    <string name="terms_url">https://capital-wizard.com/terms</string>
+    <string name="privacy_url">https://capital-wizard.com/privacy</string>
+
+    <!-- Validation / Errors -->
     <string name="error_empty_fields">Please fill in all fields</string>
+    <string name="error_email_required">Email is required</string>
+    <string name="error_email_invalid">Please enter a valid email address</string>
+    <string name="error_password_required">Password is required</string>
+    <string name="error_password_short">Password must be at least 8 characters</string>
+    <string name="error_confirm_required">Please confirm your password</string>
+    <string name="error_passwords_mismatch">Passwords do not match</string>
+    <string name="error_terms_required">Please accept the Terms of Service to continue</string>
     <string name="error_sign_in">Sign in failed</string>
     <string name="error_sign_up">Sign up failed</string>
+    <string name="error_reset">Could not send the reset link</string>
+
+    <!-- Misc -->
     <string name="sign_up_check_email">Check your email to confirm your account</string>
+
+    <!-- Accessibility -->
+    <string name="cd_language_toggle">Change language</string>
+    <string name="cd_brand_logo">Capital Wizard</string>
+
+    <!-- Brand name (not translated) -->
+    <string name="app_brand" translatable="false">Capital Wizard</string>
+
+    <!-- Locale pill 2-letter codes (not translated; display codes) -->
+    <string name="locale_code_en" translatable="false">EN</string>
+    <string name="locale_code_uk" translatable="false">UA</string>
+
+    <!-- Locale picker menu labels: flag + language endonym (shown in their
+         own language regardless of UI locale, so not translated) -->
+    <string name="locale_menu_en" translatable="false">🇬🇧 English</string>
+    <string name="locale_menu_uk" translatable="false">🇺🇦 Українська</string>
 </resources>

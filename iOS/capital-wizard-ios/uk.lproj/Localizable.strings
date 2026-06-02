@@ -32,6 +32,11 @@
 "reset.success_title" = "Перевірте вашу пошту!";
 "reset.success_description" = "Ми надіслали посилання для скидання пароля на вашу електронну пошту.";
 
+/* Shared Social Buttons (design system) */
+"social.google" = "Продовжити через Google";
+"social.apple" = "Продовжити через Apple";
+"auth.divider" = "АБО ПРОДОВЖИТИ ЧЕРЕЗ";
+
 /* Shared Fields */
 "field.email" = "Електронна пошта";
 "field.password" = "Пароль";
@@ -52,3 +57,6 @@
 
 /* Language Picker */
 "language.cancel" = "Скасувати";
+
+/* Boot Loader */
+"loader.caption" = "Обчислюємо ваші дані";

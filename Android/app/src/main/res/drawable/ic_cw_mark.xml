@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Capital Wizard "W" chart mark: white zig-zag stroke on a 0-100 viewport,
+     round caps/joins. Drawn over the dark gradient tile (bg_cw_logo_tile). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:pathData="M16,32 L38,74 L50,48 L62,74 L84,32"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="13"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

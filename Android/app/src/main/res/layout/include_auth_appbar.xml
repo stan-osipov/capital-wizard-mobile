@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared auth app-bar: locale pill pinned end.
+     Included by activity_login / activity_sign_up / activity_reset_password.
+     Stable child ID: btn_language (locale pill). -->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <!-- Locale pill (top-right): flag + code + chevron, opens a PopupMenu -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_language"
+        style="@style/Auth.LocalePill"
+        android:layout_marginTop="8dp"
+        android:contentDescription="@string/cd_language_toggle"
+        android:text="🇬🇧 EN"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Capital Wizard</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">З поверненням</string>
+    <string name="login_subtitle">Введіть свої дані для входу в обліковий запис</string>
+    <string name="login_forgot_password">Забули пароль?</string>
+    <string name="login_button">Увійти</string>
+    <string name="login_divider">АБО ПРОДОВЖИТИ ЧЕРЕЗ</string>
+    <string name="login_google">Увійти через Google</string>
+    <string name="login_no_account">Немає облікового запису?</string>
+    <string name="login_create_one">Створити</string>
+
+    <!-- Sign Up Screen -->
+    <string name="signup_title">Створіть обліковий запис</string>
+    <string name="signup_subtitle">Приєднуйтесь до тисяч користувачів</string>
+    <string name="signup_password_hint">Мінімум 8 символів</string>
+    <string name="signup_terms_agree">Я погоджуюсь з Умовами використання та Політикою конфіденційності</string>
+    <string name="signup_button">Створити обліковий запис</string>
+    <string name="signup_divider">АБО ЗАРЕЄСТРУВАТИСЬ ЧЕРЕЗ</string>
+    <string name="signup_google">Зареєструватись через Google</string>
+    <string name="signup_have_account">Вже маєте обліковий запис?</string>
+    <string name="signup_login_here">Увійти</string>
+    <string name="signup_confirm_title">Перевірте пошту</string>
+    <string name="signup_confirm_description">Ми надіслали посилання для підтвердження на вашу електронну пошту. Будь ласка, підтвердіть адресу та поверніться для входу.</string>
+    <string name="signup_back_to_login">Повернутись до входу</string>
+
+    <!-- Reset Password Screen -->
+    <string name="reset_title">Скинути пароль</string>
+    <string name="reset_subtitle">Введіть вашу електронну пошту і ми надішлемо посилання для скидання.</string>
+    <string name="reset_button">Надіслати посилання</string>
+    <string name="reset_back">← Повернутись до входу</string>
+    <string name="reset_success_title">Перевірте вашу пошту!</string>
+    <string name="reset_success_description">Ми надіслали посилання для скидання пароля на вашу електронну пошту.</string>
+
+    <!-- Shared Fields -->
+    <string name="field_email">Електронна пошта</string>
+    <string name="field_password">Пароль</string>
+    <string name="field_confirm_password">Підтвердіть пароль</string>
+    <string name="hint_email_example">you@example.com</string>
+    <string name="hint_password_example">••••••••</string>
+
+    <!-- Shared Labels -->
+    <string name="terms_label">Продовжуючи, ви погоджуєтесь з нашими Умовами використання та Політикою конфіденційності</string>
+    <string name="terms_url">https://capital-wizard.com/terms</string>
+    <string name="privacy_url">https://capital-wizard.com/privacy</string>
+
+    <!-- Validation / Errors -->
+    <string name="error_empty_fields">Будь ласка, заповніть усі поля</string>
+    <string name="error_email_required">Електронна пошта обов\'язкова</string>
+    <string name="error_email_invalid">Будь ласка, введіть дійсну електронну адресу</string>
+    <string name="error_password_required">Пароль обов\'язковий</string>
+    <string name="error_password_short">Пароль повинен містити мінімум 8 символів</string>
+    <string name="error_confirm_required">Будь ласка, підтвердіть ваш пароль</string>
+    <string name="error_passwords_mismatch">Паролі не збігаються</string>
+    <string name="error_terms_required">Будь ласка, прийміть Умови використання, щоб продовжити</string>
+    <string name="error_sign_in">Не вдалося увійти</string>
+    <string name="error_sign_up">Не вдалося зареєструватись</string>
+    <string name="error_reset">Не вдалося надіслати посилання для скидання</string>
+
+    <!-- Misc -->
+    <string name="sign_up_check_email">Перевірте пошту, щоб підтвердити обліковий запис</string>
+
+    <!-- Accessibility -->
+    <string name="cd_language_toggle">Змінити мову</string>
+    <string name="cd_brand_logo">Capital Wizard</string>
+</resources>

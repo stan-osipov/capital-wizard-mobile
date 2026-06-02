@@ -13,19 +13,32 @@ class ResetPasswordViewController: UIViewController {
         .portrait
     }
 
+    private let backgroundView = AuthBackgroundView()
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let cardView = AnimatedCardView()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let emailField = ValidatedTextField(placeholder: "you@example.com")
-    private let sendButton = GradientButton()
+    private let sendButton = SolidButton()
     private let backButton = UIButton(type: .system)
     private let termsTextView = UITextView()
     private let successView = UIView()
+    private let emailLabel = UILabel()
+
+    // Locale pill (top-right).
+    private let localePill = LocalePillButton()
 
     private lazy var windowsService: WindowsService? = ServiceManager.shared.getService()
     private var activeTextField: UIView?
+
+    private var effectiveStyle: UIUserInterfaceStyle {
+        if traitCollection.userInterfaceStyle != .unspecified {
+            return traitCollection.userInterfaceStyle
+        }
+        return windowsService?.window.traitCollection.userInterfaceStyle ?? .dark
+    }
+    private var colors: AppColors { AppColors.colors(for: effectiveStyle) }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -44,11 +57,25 @@ class ResetPasswordViewController: UIViewController {
     }
 
     private func setupUI() {
-        view.backgroundColor = windowsService?.colors.backgroundColor
+        let colors = self.colors
+
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(backgroundView)
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         tap.cancelsTouchesInView = false
         view.addGestureRecognizer(tap)
+
+        // Locale pill (top-right): flag + code + chevron, opens a dropdown.
+        // Refresh localized text in place — never present a new VC (that
+        // stacks modals and causes janky transitions).
+        localePill.onSelect = { [weak self] code in
+            guard let self = self else { return }
+            LocalizationManager.shared.currentLanguage = code
+            self.applyLocalizedStrings()
+            self.localePill.refreshLanguage()
+        }
+        view.addSubview(localePill)
 
         // ScrollView for keyboard avoidance
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -56,6 +83,8 @@ class ResetPasswordViewController: UIViewController {
         scrollView.alwaysBounceVertical = true
         scrollView.keyboardDismissMode = .interactive
         view.addSubview(scrollView)
+        // Keep the locale pill above the full-screen scroll view so it stays tappable.
+        view.bringSubviewToFront(localePill)
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentView)
@@ -64,25 +93,24 @@ class ResetPasswordViewController: UIViewController {
         contentView.addSubview(cardView)
 
         titleLabel.text      = L("reset.title")
-        titleLabel.font      = .systemFont(ofSize: 28, weight: .bold)
-        titleLabel.textColor = windowsService?.colors.textPrimary
+        titleLabel.font      = .systemFont(ofSize: 24, weight: .semibold)
+        titleLabel.textColor = colors.dsText
 
         subtitleLabel.text          = L("reset.subtitle")
         subtitleLabel.font          = .systemFont(ofSize: 14)
-        subtitleLabel.textColor     = windowsService?.colors.textSecondary
+        subtitleLabel.textColor     = colors.dsTextMuted
         subtitleLabel.numberOfLines = 0
 
-        let emailLabel       = UILabel()
         emailLabel.text      = L("field.email")
-        emailLabel.font      = .systemFont(ofSize: 14, weight: .medium)
-        emailLabel.textColor = windowsService?.colors.textPrimary
+        emailLabel.font      = .systemFont(ofSize: 12, weight: .medium)
+        emailLabel.textColor = colors.dsTextMuted
 
         sendButton.setTitle(L("reset.button"), for: .normal)
         sendButton.addTarget(self, action: #selector(sendResetTapped), for: .touchUpInside)
 
         backButton.setTitle(L("reset.back"), for: .normal)
-        backButton.setTitleColor(windowsService?.colors.linkColor, for: .normal)
-        backButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        backButton.setTitleColor(colors.dsAccent, for: .normal)
+        backButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
 
         setupTermsTextView()
@@ -102,6 +130,15 @@ class ResetPasswordViewController: UIViewController {
         cardWidth.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            // Locale pill (top-right)
+            localePill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            localePill.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
             // ScrollView
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -115,44 +152,75 @@ class ResetPasswordViewController: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
             contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.heightAnchor),
 
+            cardView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 80),
             cardView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            cardView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -70),
             cardView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 24),
             cardView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -24),
             cardWidth,
-            cardView.widthAnchor.constraint(lessThanOrEqualToConstant: 400),
+            cardView.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
 
-            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 32),
-            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor),
+            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: cardView.trailingAnchor),
 
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            subtitleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            subtitleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
+            subtitleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            emailLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
-            emailLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            emailLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 28),
+            emailLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
 
-            emailField.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: 8),
-            emailField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            emailField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            emailField.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: 6),
+            emailField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            emailField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
             sendButton.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 24),
-            sendButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            sendButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
-            sendButton.heightAnchor.constraint(equalToConstant: 50),
+            sendButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            sendButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            sendButton.heightAnchor.constraint(equalToConstant: 48),
 
-            backButton.topAnchor.constraint(equalTo: sendButton.bottomAnchor, constant: 16),
+            backButton.topAnchor.constraint(equalTo: sendButton.bottomAnchor, constant: 18),
             backButton.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
-            backButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -32),
+            backButton.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
 
-            successView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
-            successView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            successView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            successView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 28),
+            successView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            successView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
             termsTextView.topAnchor.constraint(equalTo: cardView.bottomAnchor, constant: 24),
             termsTextView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
-            termsTextView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40)
+            termsTextView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
+            termsTextView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16)
         ])
+    }
+
+    /// Re-reads every localized string in place after a language change so the
+    /// screen updates without presenting a fresh view controller.
+    private func applyLocalizedStrings() {
+        titleLabel.text = L("reset.title")
+        subtitleLabel.text = L("reset.subtitle")
+        emailLabel.text = L("field.email")
+        sendButton.setTitle(L("reset.button"), for: .normal)
+        backButton.setTitle(L("reset.back"), for: .normal)
+        setupTermsTextView()
+    }
+
+    /// Re-applies directly-set text colors on a live system-appearance change.
+    private func applyThemeColors() {
+        let colors = self.colors
+        titleLabel.textColor = colors.dsText
+        subtitleLabel.textColor = colors.dsTextMuted
+        emailLabel.textColor = colors.dsTextMuted
+        backButton.setTitleColor(colors.dsAccent, for: .normal)
+        localePill.applyColors()
+        setupTermsTextView()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            applyThemeColors()
+        }
     }
 
     private func setupTermsTextView() {
@@ -162,7 +230,7 @@ class ResetPasswordViewController: UIViewController {
         termsTextView.textContainerInset = .zero
         termsTextView.textContainer.lineFragmentPadding = 0
         termsTextView.linkTextAttributes = [
-            .foregroundColor: windowsService?.colors.linkColor ?? .systemPurple
+            .foregroundColor: colors.dsAccent
         ]
 
         let text = L("terms.label")
@@ -171,7 +239,7 @@ class ResetPasswordViewController: UIViewController {
 
         let attributed = NSMutableAttributedString(string: text, attributes: [
             .font: UIFont.systemFont(ofSize: 12),
-            .foregroundColor: windowsService?.colors.textSecondary ?? .gray
+            .foregroundColor: colors.dsTextSubtle
         ])
 
         if let termsRange = text.range(of: termsWord) {
@@ -196,26 +264,26 @@ class ResetPasswordViewController: UIViewController {
         successView.isHidden = true
 
         let iconContainer                = UIView()
-        iconContainer.backgroundColor    = windowsService?.colors.successGreen.withAlphaComponent(0.2)
+        iconContainer.backgroundColor    = colors.successGreen.withAlphaComponent(0.16)
         iconContainer.layer.cornerRadius = 30
         iconContainer.translatesAutoresizingMaskIntoConstraints = false
 
         let checkIcon = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
-        checkIcon.tintColor = windowsService?.colors.successGreen
+        checkIcon.tintColor = colors.successGreen
         checkIcon.translatesAutoresizingMaskIntoConstraints = false
         iconContainer.addSubview(checkIcon)
 
         let successLabel           = UILabel()
         successLabel.text          = L("reset.success_title")
         successLabel.font          = .systemFont(ofSize: 16, weight: .semibold)
-        successLabel.textColor     = windowsService?.colors.textPrimary
+        successLabel.textColor     = colors.dsText
         successLabel.textAlignment = .center
         successLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let descLabel = UILabel()
         descLabel.text = L("reset.success_description")
         descLabel.font = .systemFont(ofSize: 14)
-        descLabel.textColor = windowsService?.colors.textSecondary
+        descLabel.textColor = colors.dsTextMuted
         descLabel.textAlignment = .center
         descLabel.numberOfLines = 0
         descLabel.translatesAutoresizingMaskIntoConstraints = false

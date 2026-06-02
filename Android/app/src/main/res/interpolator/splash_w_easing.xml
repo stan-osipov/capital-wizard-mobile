@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Approximates the design's CSS cubic-bezier(0.65, 0, 0.35, 1) ease-in-out.
+     pathInterpolator control points map 1:1 onto the bezier handles. -->
+<pathInterpolator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:controlX1="0.65"
+    android:controlY1="0"
+    android:controlX2="0.35"
+    android:controlY2="1" />

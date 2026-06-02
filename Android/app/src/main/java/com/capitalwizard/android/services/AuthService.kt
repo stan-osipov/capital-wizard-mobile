@@ -85,6 +85,15 @@ class AuthService(private val context: Context) {
         auth.signInWith(Google)
     }
 
+    /**
+     * Sends a password-recovery email. Uses the configured PKCE redirect
+     * (scheme/host set on the Auth plugin above) so the deep link returns
+     * to the app. Mirrors the iOS `resetPasswordForEmail` flow.
+     */
+    suspend fun resetPasswordForEmail(email: String) {
+        auth.resetPasswordForEmail(email)
+    }
+
     suspend fun signOut() {
         try {
             auth.signOut()

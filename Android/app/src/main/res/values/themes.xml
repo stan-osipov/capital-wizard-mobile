@@ -1,21 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!-- Base (LIGHT) theme. The night variant lives in values-night/themes.xml.
+         Stays on the DayNight parent so colors swap automatically. -->
     <style name="Theme.CapitalWizard" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/gradient_primary</item>
-        <item name="colorPrimaryVariant">@color/gradient_secondary</item>
-        <item name="colorOnPrimary">@color/text_primary</item>
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryVariant">@color/accent</item>
+        <item name="colorOnPrimary">@color/on_accent</item>
+        <item name="colorSecondary">@color/accent</item>
+        <item name="colorSecondaryVariant">@color/accent</item>
+        <item name="colorOnSecondary">@color/on_accent</item>
         <item name="android:colorBackground">@color/background</item>
-        <item name="colorSurface">@color/card_background</item>
+        <item name="colorSurface">@color/surface</item>
         <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorError">@color/error_red</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <!-- Light background → dark status-bar icons -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <style name="Theme.CapitalWizard.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <!-- "Line Draw" W mark; theme-aware via @color refs in ic_splash_w. -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="windowSplashScreenAnimationDuration">900</item>
         <item name="postSplashScreenTheme">@style/Theme.CapitalWizard</item>
     </style>
 

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Capital Wizard "Line Draw" splash mark: rising chart zig-zag W.
+     Two stacked stroked paths over a 0-100 viewport (no fill):
+       - "track": faint full W underneath (@color/border)
+       - "line":  amber W that the animator draws via trimPathEnd (@color/accent)
+     Theme-aware: @color/border and @color/accent resolve from values/ (light)
+     and values-night/ (dark) automatically.
+
+     MASKING CAVEAT: the Android 12+ system splash masks the animated icon to a
+     centered circular safe zone (~2/3 of the icon bounds). The raw W path spans
+     x=[13,87] y=[18,83] which would clip. Both paths are wrapped in a <group>
+     scaled 0.62 around the W's center pivot (50, 50.5) so the mark — including
+     the 6-wide round-capped stroke — sits comfortably inside the safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <group
+        android:name="w_group"
+        android:pivotX="50"
+        android:pivotY="50.5"
+        android:scaleX="0.62"
+        android:scaleY="0.62">
+        <path
+            android:name="track"
+            android:pathData="M13,45 L31,83 L45,34 L63.5,66 L87,18"
+            android:strokeColor="@color/border"
+            android:strokeWidth="6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:name="line"
+            android:pathData="M13,45 L31,83 L45,34 L63.5,66 L87,18"
+            android:strokeColor="@color/accent"
+            android:strokeWidth="6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:trimPathStart="0"
+            android:trimPathEnd="0" />
+    </group>
+</vector>

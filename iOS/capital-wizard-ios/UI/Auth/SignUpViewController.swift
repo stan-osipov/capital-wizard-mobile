@@ -16,6 +16,15 @@ class SignUpViewController: UIViewController {
 
     private lazy var windowsService: WindowsService? = ServiceManager.shared.getService()
 
+    private var effectiveStyle: UIUserInterfaceStyle {
+        if traitCollection.userInterfaceStyle != .unspecified {
+            return traitCollection.userInterfaceStyle
+        }
+        return windowsService?.window.traitCollection.userInterfaceStyle ?? .dark
+    }
+    private var colors: AppColors { AppColors.colors(for: effectiveStyle) }
+
+    private let backgroundView = AuthBackgroundView()
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let cardView = AnimatedCardView()
@@ -24,13 +33,28 @@ class SignUpViewController: UIViewController {
     private let emailField = ValidatedTextField(placeholder: "you@example.com")
     private let passwordField = ValidatedTextField(placeholder: "••••••••", isSecure: true, showPasswordToggle: true)
     private let confirmPasswordField = ValidatedTextField(placeholder: "••••••••", isSecure: true, showPasswordToggle: true)
-    private let termsCheckbox = UIButton(type: .custom)
-    private let createButton = GradientButton()
-    private let googleButton = UIButton(type: .system)
-    private lazy var appleButton = ASAuthorizationAppleIDButton(type: .signUp, style: traitCollection.userInterfaceStyle == .dark ? .white : .black)
+    private let termsCheckbox = TermsCheckbox()
+    private let createButton = SolidButton()
+    private let googleButton = SocialButton(provider: .google, title: L("social.google"))
+    private let appleButton = SocialButton(provider: .apple, title: L("social.apple"))
     private let loginButton = UIButton(type: .system)
     private let termsTextView = UITextView()
     private let confirmationView = UIView()
+
+    // Locale pill (top-right).
+    private let localePill = LocalePillButton()
+
+    // Color-dependent labels kept as properties so they refresh on a live
+    // system-appearance change while the screen is visible.
+    private let emailLabel = UILabel()
+    private let passwordLabel = UILabel()
+    private let confirmLabel = UILabel()
+    private let passwordHint = UILabel()
+    private let termsText = UILabel()
+    private let haveAccountLabel = UILabel()
+    private let dividerLabel = UILabel()
+    private var dividerLines: [UIView] = []
+
     private var termsAccepted = false
     private var activeTextField: UIView?
     private var formBottomConstraint: NSLayoutConstraint?
@@ -54,11 +78,25 @@ class SignUpViewController: UIViewController {
     }
 
     private func setupUI() {
-        view.backgroundColor = windowsService?.colors.backgroundColor
+        let colors = self.colors
+
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(backgroundView)
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         tap.cancelsTouchesInView = false
         view.addGestureRecognizer(tap)
+
+        // Locale pill (top-right): flag + code + chevron, opens a dropdown.
+        // Refresh localized text in place — never present a new VC (that
+        // stacks modals and causes janky transitions).
+        localePill.onSelect = { [weak self] code in
+            guard let self = self else { return }
+            LocalizationManager.shared.currentLanguage = code
+            self.applyLocalizedStrings()
+            self.localePill.refreshLanguage()
+        }
+        view.addSubview(localePill)
 
         // ScrollView for keyboard avoidance
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -66,6 +104,8 @@ class SignUpViewController: UIViewController {
         scrollView.alwaysBounceVertical = true
         scrollView.keyboardDismissMode = .interactive
         view.addSubview(scrollView)
+        // Keep the locale pill above the full-screen scroll view so it stays tappable.
+        view.bringSubviewToFront(localePill)
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentView)
@@ -74,62 +114,54 @@ class SignUpViewController: UIViewController {
         contentView.addSubview(cardView)
 
         titleLabel.text = L("signup.title")
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
-        titleLabel.textColor = windowsService?.colors.textPrimary
+        titleLabel.font = .systemFont(ofSize: 24, weight: .semibold)
+        titleLabel.textColor = colors.dsText
+        titleLabel.numberOfLines = 0
 
         subtitleLabel.text = L("signup.subtitle")
         subtitleLabel.font = .systemFont(ofSize: 14)
-        subtitleLabel.textColor = windowsService?.colors.textSecondary
+        subtitleLabel.textColor = colors.dsTextMuted
+        subtitleLabel.numberOfLines = 0
 
-        let emailLabel = createLabel(L("field.email"))
-        let passwordLabel = createLabel(L("field.password"))
-        let confirmLabel = createLabel(L("field.confirm_password"))
+        configureLabel(emailLabel, text: L("field.email"))
+        configureLabel(passwordLabel, text: L("field.password"))
+        configureLabel(confirmLabel, text: L("field.confirm_password"))
 
-        let passwordHint = UILabel()
         passwordHint.text = L("signup.password_hint")
         passwordHint.font = .systemFont(ofSize: 12)
-        passwordHint.textColor = windowsService?.colors.textSecondary
+        passwordHint.textColor = colors.dsTextSubtle
 
-        // Terms Checkbox — fixed size with proper symbol configuration
-        let checkboxConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
-        termsCheckbox.setImage(UIImage(systemName: "square", withConfiguration: checkboxConfig), for: .normal)
-        termsCheckbox.setImage(UIImage(systemName: "checkmark.square.fill", withConfiguration: checkboxConfig), for: .selected)
-        termsCheckbox.tintColor = windowsService?.colors.textSecondary
-        termsCheckbox.addTarget(self, action: #selector(toggleTerms), for: .touchUpInside)
+        // Terms checkbox (design system) — gates the primary button.
+        termsCheckbox.addTarget(self, action: #selector(toggleTerms), for: .valueChanged)
         termsCheckbox.setContentHuggingPriority(.required, for: .horizontal)
         termsCheckbox.setContentCompressionResistancePriority(.required, for: .horizontal)
-        termsCheckbox.imageView?.contentMode = .scaleAspectFit
 
-        let termsText = UILabel()
         termsText.text = L("signup.terms_agree")
-        termsText.font = .systemFont(ofSize: 14)
-        termsText.textColor = windowsService?.colors.textSecondary
+        termsText.font = .systemFont(ofSize: 13)
+        termsText.textColor = colors.dsTextMuted
         termsText.numberOfLines = 0
 
         let termsStack = UIStackView(arrangedSubviews: [termsCheckbox, termsText])
-        termsStack.spacing = 8
-        termsStack.alignment = .top
+        termsStack.spacing = 6
+        termsStack.alignment = .center
 
         createButton.setTitle(L("signup.button"), for: .normal)
         createButton.addTarget(self, action: #selector(createTapped), for: .touchUpInside)
+        createButton.isFormEnabled = false // disabled (0.4) until Terms accepted
 
-        let dividerStack = createDivider(text: L("signup.divider"))
+        let dividerStack = createDivider(text: L("auth.divider"))
 
-        // Google button — bordered style
-        setupGoogleButton(title: L("signup.google"))
-
-        // Apple button
-        appleButton.cornerRadius = 8
+        // Social buttons call the SAME existing auth flow
+        googleButton.addTarget(self, action: #selector(googleSignUpTapped), for: .touchUpInside)
         appleButton.addTarget(self, action: #selector(appleSignUpTapped), for: .touchUpInside)
 
-        let haveAccountLabel = UILabel()
         haveAccountLabel.text = L("signup.have_account")
         haveAccountLabel.font = .systemFont(ofSize: 14)
-        haveAccountLabel.textColor = windowsService?.colors.textSecondary
+        haveAccountLabel.textColor = colors.dsTextMuted
 
         loginButton.setTitle(L("signup.login_here"), for: .normal)
-        loginButton.setTitleColor(windowsService?.colors.linkColor, for: .normal)
-        loginButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        loginButton.setTitleColor(colors.dsAccent, for: .normal)
+        loginButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
         loginButton.addTarget(self, action: #selector(loginTapped), for: .touchUpInside)
 
         let loginStack = UIStackView(arrangedSubviews: [haveAccountLabel, loginButton])
@@ -155,6 +187,15 @@ class SignUpViewController: UIViewController {
         cardWidth.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            // Locale pill (top-right)
+            localePill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            localePill.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
             // ScrollView
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -168,125 +209,105 @@ class SignUpViewController: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
             contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.heightAnchor),
 
+            cardView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 80),
             cardView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            cardView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -50),
             cardView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 24),
             cardView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -24),
             cardWidth,
-            cardView.widthAnchor.constraint(lessThanOrEqualToConstant: 400),
+            cardView.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
 
-            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            titleLabel.topAnchor.constraint(equalTo: cardView.topAnchor),
+            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
-            subtitleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
+            subtitleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            emailLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 10),
-            emailLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            emailLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 22),
+            emailLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
 
-            emailField.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: 4),
-            emailField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            emailField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            emailField.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: 6),
+            emailField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            emailField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            passwordLabel.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 10),
-            passwordLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            passwordLabel.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 14),
+            passwordLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
 
-            passwordField.topAnchor.constraint(equalTo: passwordLabel.bottomAnchor, constant: 4),
-            passwordField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            passwordField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            passwordField.topAnchor.constraint(equalTo: passwordLabel.bottomAnchor, constant: 6),
+            passwordField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            passwordField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            passwordHint.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 2),
-            passwordHint.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            passwordHint.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 6),
+            passwordHint.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
 
-            confirmLabel.topAnchor.constraint(equalTo: passwordHint.bottomAnchor, constant: 8),
-            confirmLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
+            confirmLabel.topAnchor.constraint(equalTo: passwordHint.bottomAnchor, constant: 12),
+            confirmLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
 
-            confirmPasswordField.topAnchor.constraint(equalTo: confirmLabel.bottomAnchor, constant: 4),
-            confirmPasswordField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            confirmPasswordField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            confirmPasswordField.topAnchor.constraint(equalTo: confirmLabel.bottomAnchor, constant: 6),
+            confirmPasswordField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            confirmPasswordField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            // Terms checkbox with fixed width
-            termsCheckbox.widthAnchor.constraint(equalToConstant: 28),
-            termsCheckbox.heightAnchor.constraint(equalToConstant: 28),
+            termsStack.topAnchor.constraint(equalTo: confirmPasswordField.bottomAnchor, constant: 14),
+            termsStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            termsStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            termsStack.topAnchor.constraint(equalTo: confirmPasswordField.bottomAnchor, constant: 10),
-            termsStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            termsStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            createButton.topAnchor.constraint(equalTo: termsStack.bottomAnchor, constant: 16),
+            createButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            createButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            createButton.heightAnchor.constraint(equalToConstant: 48),
 
-            createButton.topAnchor.constraint(equalTo: termsStack.bottomAnchor, constant: 10),
-            createButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            createButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
-            createButton.heightAnchor.constraint(equalToConstant: 40),
+            dividerStack.topAnchor.constraint(equalTo: createButton.bottomAnchor, constant: 24),
+            dividerStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            dividerStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            dividerStack.topAnchor.constraint(equalTo: createButton.bottomAnchor, constant: 10),
-            dividerStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            dividerStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            googleButton.topAnchor.constraint(equalTo: dividerStack.bottomAnchor, constant: 24),
+            googleButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            googleButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            googleButton.heightAnchor.constraint(equalToConstant: 48),
 
-            googleButton.topAnchor.constraint(equalTo: dividerStack.bottomAnchor, constant: 10),
-            googleButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            googleButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
-            googleButton.heightAnchor.constraint(equalToConstant: 40),
+            appleButton.topAnchor.constraint(equalTo: googleButton.bottomAnchor, constant: 12),
+            appleButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            appleButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            appleButton.heightAnchor.constraint(equalToConstant: 48),
 
-            appleButton.topAnchor.constraint(equalTo: googleButton.bottomAnchor, constant: 8),
-            appleButton.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            appleButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
-            appleButton.heightAnchor.constraint(equalToConstant: 40),
-
-            loginStack.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 10),
+            loginStack.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 24),
             loginStack.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
 
             // Confirmation view centered in card
             confirmationView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
-            confirmationView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 24),
-            confirmationView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -24),
+            confirmationView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            confirmationView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            termsTextView.topAnchor.constraint(equalTo: cardView.bottomAnchor, constant: 12),
+            termsTextView.topAnchor.constraint(equalTo: cardView.bottomAnchor, constant: 20),
             termsTextView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
-            termsTextView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40)
+            termsTextView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
+            termsTextView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16)
         ])
 
         // Store switchable bottom constraints
-        formBottomConstraint = loginStack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -16)
-        confirmBottomConstraint = confirmationView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -24)
+        formBottomConstraint = loginStack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor)
+        confirmBottomConstraint = confirmationView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor)
         formBottomConstraint?.isActive = true
     }
 
-    private func setupGoogleButton(title: String) {
-        googleButton.setTitle(title, for: .normal)
-        googleButton.setTitleColor(windowsService?.colors.textPrimary, for: .normal)
-        googleButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
-        googleButton.backgroundColor = .clear
-        googleButton.layer.cornerRadius = 8
-        googleButton.layer.borderWidth = 1
-        googleButton.layer.borderColor = windowsService?.colors.cardBorder.cgColor
-
-        // Google "G" icon
-        let gIcon = createGoogleIcon(size: 20)
-        googleButton.setImage(gIcon, for: .normal)
-        googleButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 8)
-        googleButton.titleEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: 0)
-
-        googleButton.addTarget(self, action: #selector(googleSignUpTapped), for: .touchUpInside)
-        googleButton.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
-        googleButton.addTarget(self, action: #selector(buttonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-    }
-
-    private func createGoogleIcon(size: CGFloat) -> UIImage {
-        return GoogleIconRenderer.render(size: size)
-    }
-
-    @objc private func buttonTouchDown(_ sender: UIButton) {
-        UIView.animate(withDuration: 0.1) {
-            sender.transform = CGAffineTransform(scaleX: 0.97, y: 0.97)
-            sender.alpha = 0.7
-        }
-    }
-
-    @objc private func buttonTouchUp(_ sender: UIButton) {
-        UIView.animate(withDuration: 0.1) {
-            sender.transform = .identity
-            sender.alpha = 1.0
-        }
+    /// Re-reads every localized string in place after a language change so the
+    /// screen updates without presenting a fresh view controller.
+    private func applyLocalizedStrings() {
+        titleLabel.text = L("signup.title")
+        subtitleLabel.text = L("signup.subtitle")
+        emailLabel.text = L("field.email")
+        passwordLabel.text = L("field.password")
+        confirmLabel.text = L("field.confirm_password")
+        passwordHint.text = L("signup.password_hint")
+        termsText.text = L("signup.terms_agree")
+        createButton.setTitle(L("signup.button"), for: .normal)
+        dividerLabel.text = L("auth.divider")
+        googleButton.updateTitle(L("social.google"))
+        appleButton.updateTitle(L("social.apple"))
+        haveAccountLabel.text = L("signup.have_account")
+        loginButton.setTitle(L("signup.login_here"), for: .normal)
+        setupTermsTextView()
     }
 
     private func setupTermsTextView() {
@@ -296,7 +317,7 @@ class SignUpViewController: UIViewController {
         termsTextView.textContainerInset = .zero
         termsTextView.textContainer.lineFragmentPadding = 0
         termsTextView.linkTextAttributes = [
-            .foregroundColor: windowsService?.colors.linkColor ?? .systemPurple
+            .foregroundColor: colors.dsAccent
         ]
 
         let text = L("terms.label")
@@ -305,7 +326,7 @@ class SignUpViewController: UIViewController {
 
         let attributed = NSMutableAttributedString(string: text, attributes: [
             .font: UIFont.systemFont(ofSize: 12),
-            .foregroundColor: windowsService?.colors.textSecondary ?? .gray
+            .foregroundColor: colors.dsTextSubtle
         ])
 
         if let termsRange = text.range(of: termsWord) {
@@ -330,34 +351,34 @@ class SignUpViewController: UIViewController {
         confirmationView.isHidden = true
 
         let iconContainer = UIView()
-        iconContainer.backgroundColor = windowsService?.colors.gradientFirst.withAlphaComponent(0.2)
+        iconContainer.backgroundColor = colors.dsAccentSoft
         iconContainer.layer.cornerRadius = 30
         iconContainer.translatesAutoresizingMaskIntoConstraints = false
 
         let emailIcon = UIImageView(image: UIImage(systemName: "envelope.circle.fill"))
-        emailIcon.tintColor = windowsService?.colors.gradientFirst
+        emailIcon.tintColor = colors.dsAccent
         emailIcon.translatesAutoresizingMaskIntoConstraints = false
         iconContainer.addSubview(emailIcon)
 
         let titleLabel = UILabel()
         titleLabel.text = L("signup.confirm_title")
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        titleLabel.textColor = windowsService?.colors.textPrimary
+        titleLabel.textColor = colors.dsText
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let descLabel = UILabel()
         descLabel.text = L("signup.confirm_description")
         descLabel.font = .systemFont(ofSize: 14)
-        descLabel.textColor = windowsService?.colors.textSecondary
+        descLabel.textColor = colors.dsTextMuted
         descLabel.textAlignment = .center
         descLabel.numberOfLines = 0
         descLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let backToLoginButton = UIButton(type: .system)
         backToLoginButton.setTitle(L("signup.back_to_login"), for: .normal)
-        backToLoginButton.setTitleColor(windowsService?.colors.linkColor, for: .normal)
-        backToLoginButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        backToLoginButton.setTitleColor(colors.dsAccent, for: .normal)
+        backToLoginButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
         backToLoginButton.addTarget(self, action: #selector(loginTapped), for: .touchUpInside)
         backToLoginButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -449,45 +470,66 @@ class SignUpViewController: UIViewController {
         }
 
         if !termsAccepted {
-            let shake = CAKeyframeAnimation(keyPath: "transform.translation.x")
-            shake.values = [-8, 8, -6, 6, -4, 4, 0]
-            shake.duration = 0.4
-            termsCheckbox.layer.add(shake, forKey: "shake")
-            termsCheckbox.tintColor = windowsService?.colors.errorRed
+            termsCheckbox.shake()
             isValid = false
         }
 
         return isValid
     }
 
-    private func createLabel(_ text: String) -> UILabel {
-        let label = UILabel()
+    private func configureLabel(_ label: UILabel, text: String) {
         label.text = text
-        label.font = .systemFont(ofSize: 14, weight: .medium)
-        label.textColor = windowsService?.colors.textPrimary
-        return label
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = colors.dsTextMuted
     }
 
     private func createDivider(text: String) -> UIStackView {
         let leftLine = UIView()
-        leftLine.backgroundColor = windowsService?.colors.cardBorder
+        leftLine.backgroundColor = colors.dsBorder
         leftLine.heightAnchor.constraint(equalToConstant: 1).isActive = true
 
         let rightLine = UIView()
-        rightLine.backgroundColor = windowsService?.colors.cardBorder
+        rightLine.backgroundColor = colors.dsBorder
         rightLine.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        dividerLines = [leftLine, rightLine]
 
-        let label = UILabel()
-        label.text = text
-        label.font = .systemFont(ofSize: 14)
-        label.textColor = windowsService?.colors.textSecondary
+        dividerLabel.text = text
+        dividerLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        dividerLabel.textColor = colors.dsTextSubtle
+        dividerLabel.setContentHuggingPriority(.required, for: .horizontal)
+        dividerLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        let stack = UIStackView(arrangedSubviews: [leftLine, label, rightLine])
-        stack.spacing = 16
+        let stack = UIStackView(arrangedSubviews: [leftLine, dividerLabel, rightLine])
+        stack.spacing = 12
         stack.alignment = .center
         leftLine.widthAnchor.constraint(equalTo: rightLine.widthAnchor).isActive = true
 
         return stack
+    }
+
+    /// Re-applies directly-set text/line colors on a live appearance change.
+    private func applyThemeColors() {
+        let colors = self.colors
+        titleLabel.textColor = colors.dsText
+        subtitleLabel.textColor = colors.dsTextMuted
+        emailLabel.textColor = colors.dsTextMuted
+        passwordLabel.textColor = colors.dsTextMuted
+        confirmLabel.textColor = colors.dsTextMuted
+        passwordHint.textColor = colors.dsTextSubtle
+        termsText.textColor = colors.dsTextMuted
+        haveAccountLabel.textColor = colors.dsTextMuted
+        dividerLabel.textColor = colors.dsTextSubtle
+        dividerLines.forEach { $0.backgroundColor = colors.dsBorder }
+        loginButton.setTitleColor(colors.dsAccent, for: .normal)
+        localePill.applyColors()
+        setupTermsTextView()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            applyThemeColors()
+        }
     }
 
     @objc private func dismissKeyboard() {
@@ -495,17 +537,9 @@ class SignUpViewController: UIViewController {
     }
 
     @objc private func toggleTerms() {
-        termsAccepted.toggle()
-        termsCheckbox.isSelected = termsAccepted
-        termsCheckbox.tintColor = termsAccepted ? windowsService?.colors.gradientFirst : windowsService?.colors.textSecondary
-
-        UIView.animate(withDuration: 0.1, animations: {
-            self.termsCheckbox.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
-        }) { _ in
-            UIView.animate(withDuration: 0.1) {
-                self.termsCheckbox.transform = .identity
-            }
-        }
+        termsAccepted = termsCheckbox.isChecked
+        // Gate the primary button on acceptance.
+        createButton.isFormEnabled = termsAccepted
     }
 
     @objc private func createTapped() {

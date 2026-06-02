@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark rounded tile behind the Capital Wizard "W" mark.
+     Mirrors the web .cw-logo gradient: linear-gradient(155deg, #2c2d31, #131316).
+     Android gradient angle is measured counter-clockwise from 3 o'clock, so
+     155deg in CSS (clockwise from the top) maps to ~295 here; rounded to 315
+     (top-left -> bottom-right) for the equivalent dark-to-darker diagonal. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="9dp" />
+    <gradient
+        android:angle="315"
+        android:startColor="#2C2D31"
+        android:endColor="#131316"
+        android:type="linear" />
+</shape>

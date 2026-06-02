@@ -7,6 +7,7 @@
         android:name=".CapitalWizardApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.CapitalWizard"
@@ -34,10 +35,34 @@
         </activity>
 
         <activity
+            android:name=".ui.auth.SignUpActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.auth.LoginActivity"
+            android:theme="@style/Theme.CapitalWizard" />
+
+        <activity
+            android:name=".ui.auth.ResetPasswordActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.auth.LoginActivity"
+            android:theme="@style/Theme.CapitalWizard" />
+
+        <activity
             android:name=".ui.WebViewActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.CapitalWizard" />
+
+        <!-- Enables AppCompat to persist the per-app locale (EN/UA toggle)
+             across process death on API < 33. On API 33+ the framework
+             LocaleManager handles persistence; this is a harmless no-op there. -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
 
     </application>
 

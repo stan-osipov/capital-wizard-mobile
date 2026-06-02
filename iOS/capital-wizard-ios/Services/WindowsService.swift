@@ -47,6 +47,33 @@ enum ColorScheme: UInt8 {
     }
 }
 
+/// User-facing theme preference persisted in `UserDefaults`.
+/// Default (unset) is `.system` — the app follows the device appearance.
+enum ThemePreference: String {
+    case system = "system"
+    case light  = "light"
+    case dark   = "dark"
+
+    var overrideStyle: UIUserInterfaceStyle {
+        switch self {
+        case .system: return .unspecified
+        case .light:  return .light
+        case .dark:   return .dark
+        }
+    }
+}
+
+/// Small hex convenience initialiser so the palette below reads exactly like
+/// the web / Android design-system tokens (e.g. `UIColor(hex: 0xF59E0B)`).
+extension UIColor {
+    convenience init(hex: UInt32, alpha: CGFloat = 1) {
+        let r = CGFloat((hex >> 16) & 0xFF) / 255
+        let g = CGFloat((hex >> 8)  & 0xFF) / 255
+        let b = CGFloat( hex        & 0xFF) / 255
+        self.init(red: r, green: g, blue: b, alpha: alpha)
+    }
+}
+
 struct AppColors {
     var blurEffect:      UIBlurEffect.Style
     var backgroundColor: UIColor
@@ -60,15 +87,35 @@ struct AppColors {
 
     var successGreen    = UIColor(red: 34/255,  green: 197/255, blue: 94/255,  alpha: 1)
     var errorRed        = UIColor(red: 239/255, green: 68/255,  blue: 68/255,  alpha: 1)
-    var cardBackground  = UIColor(red: 30/255,  green: 41/255,  blue: 59/255,  alpha: 1)
-    var cardBorder      = UIColor(red: 51/255,  green: 65/255,  blue: 85/255,  alpha: 1)
+    var cardBackground:  UIColor
+    var cardBorder:      UIColor
 
-    var inputBackground = UIColor(red: 30/255,  green: 41/255,  blue: 59/255,  alpha: 1)
-    var inputBorder     = UIColor(red: 71/255,  green: 85/255,  blue: 105/255, alpha: 1)
-    var textSecondary   = UIColor(red: 148/255, green: 163/255, blue: 184/255, alpha: 1)
-    var linkColor       = UIColor(red: 139/255, green: 92/255,  blue: 246/255, alpha: 1)
+    var inputBackground: UIColor
+    var inputBorder:     UIColor
+    var textSecondary:   UIColor
+    var linkColor:       UIColor
 
-    var textPrimary     = UIColor.white
+    var textPrimary:     UIColor
+
+    // MARK: - Design-system tokens (shared with web + Android)
+
+    /// Page background (behind the auth card).
+    var dsBackground:   UIColor
+    /// Elevated surface (social buttons, etc.).
+    var dsSurface:      UIColor
+    var dsSurface2:     UIColor
+    var dsSurfaceHover: UIColor
+    var dsBorder:       UIColor
+    var dsBorderStrong: UIColor
+    var dsText:         UIColor
+    var dsTextMuted:    UIColor
+    var dsTextSubtle:   UIColor
+    /// Amber accent — links, focus rings, selection, checkbox fill.
+    var dsAccent:       UIColor
+    /// Soft amber halo used for focus rings.
+    var dsAccentSoft:   UIColor
+    /// Foreground drawn on top of the amber accent (e.g. checkbox glyph).
+    var dsOnAccent:     UIColor
 
     /// Colour behind the keyboard / bottom safe-area.  Matches the iOS
     /// dark-mode keyboard backdrop so its rounded corners blend in and the
@@ -78,31 +125,75 @@ struct AppColors {
     init(scheme: ColorScheme) {
         if scheme.isDarkMode {
             blurEffect      = .dark
-            backgroundColor = UIColor(red: 15/255,  green: 23/255,  blue: 42/255,  alpha: 1)
             keyboardBackground = UIColor(red: 28/255, green: 28/255, blue: 30/255, alpha: 1) // systemGray6 dark
 
             separatorLine   = UIColor(red: 3/255,  green: 140/255, blue: 140/255, alpha: 1)
-            tintColor       = .white
             unselectedColor = .white
 
             gradientFirst   = UIColor(red: 139/255, green: 92/255,  blue: 246/255, alpha: 1)
             gradientSecond  = UIColor(red: 168/255, green: 85/255,  blue: 247/255, alpha: 1)
+
+            // DARK design-system palette
+            dsBackground   = UIColor(hex: 0x121317)
+            dsSurface      = UIColor(hex: 0x1A1B20)
+            dsSurface2     = UIColor(hex: 0x1F2025)
+            dsSurfaceHover = UIColor(hex: 0x25272C)
+            dsBorder       = UIColor(hex: 0x2C2E34)
+            dsBorderStrong = UIColor(hex: 0x3A3D44)
+            dsText         = UIColor(hex: 0xF2F3F4)
+            dsTextMuted    = UIColor(hex: 0xA6AAB2)
+            dsTextSubtle   = UIColor(hex: 0x7C808A)
+            dsAccent       = UIColor(hex: 0xFBBF24)
+            dsAccentSoft   = UIColor(hex: 0xFBBF24, alpha: 0.20)
+            dsOnAccent     = UIColor(hex: 0x211A0E)
         } else {
             blurEffect      = .systemUltraThinMaterialLight
-            backgroundColor = UIColor(red: 252/255, green: 254/255, blue: 255/255, alpha: 1)
             keyboardBackground = UIColor(red: 209/255, green: 213/255, blue: 219/255, alpha: 1) // light keyboard bg
             separatorLine   = UIColor(red: 65/255,  green: 203/255, blue: 229/255, alpha: 1)
-            tintColor       = .black
             unselectedColor = .black
 
             gradientFirst   = UIColor(red: 139/255, green: 92/255,  blue: 246/255, alpha: 1)
             gradientSecond  = UIColor(red: 168/255, green: 85/255,  blue: 247/255, alpha: 1)
+
+            // LIGHT design-system palette
+            dsBackground   = UIColor(hex: 0xFAFAFB)
+            dsSurface      = UIColor(hex: 0xFFFFFF)
+            dsSurface2     = UIColor(hex: 0xF3F4F6)
+            dsSurfaceHover = UIColor(hex: 0xECEEF0)
+            dsBorder       = UIColor(hex: 0xE5E7E9)
+            dsBorderStrong = UIColor(hex: 0xD5D8DB)
+            dsText         = UIColor(hex: 0x1B1D23)
+            dsTextMuted    = UIColor(hex: 0x696D77)
+            dsTextSubtle   = UIColor(hex: 0x8C9099)
+            dsAccent       = UIColor(hex: 0xF59E0B)
+            dsAccentSoft   = UIColor(hex: 0xF59E0B, alpha: 0.16)
+            dsOnAccent     = UIColor(hex: 0xFFFFFF)
         }
+
+        // Map the design-system tokens onto the legacy names so existing
+        // screens (navigation, webview chrome, …) keep working unchanged.
+        backgroundColor = dsBackground
+        cardBackground  = dsSurface
+        cardBorder      = dsBorder
+        inputBackground = dsBackground
+        inputBorder     = dsBorder
+        textSecondary   = dsTextMuted
+        textPrimary     = dsText
+        tintColor       = dsText
+        linkColor       = dsAccent
+    }
+
+    /// Resolve the palette for a concrete *effective* interface style.
+    /// Used by views that read `traitCollection.userInterfaceStyle` so they
+    /// pick up the system appearance when the theme preference is `.system`.
+    static func colors(for style: UIUserInterfaceStyle) -> AppColors {
+        AppColors(scheme: style == .dark ? .dark : .light)
     }
 }
 
 struct WindowsServiceConst {
     static let colorSchemeKey   = "color_scheme"
+    static let themePreferenceKey = "cw_theme_pref"
     static let tabBarIconInsets = UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
 }
 
@@ -120,30 +211,73 @@ class WindowsService: NSObject, Service {
     var onColorSchemeChanged: Event<ColorScheme> = Event()
     var applicationsDelegate: ApplicationsWindowsServiceDelegate?
 
+    /// Persisted user theme preference. Default (unset) follows the system.
+    var themePreference: ThemePreference {
+        get {
+            let raw = UserDefaults.standard.string(forKey: WindowsServiceConst.themePreferenceKey)
+            return raw.flatMap(ThemePreference.init(rawValue:)) ?? .system
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: WindowsServiceConst.themePreferenceKey)
+        }
+    }
+
     var colors: AppColors {
         AppColors(scheme: colorScheme)
     }
 
     init(window: UIWindow) {
-        self.window      = window
-        self.colorScheme = .dark
+        self.window = window
+
+        // Resolve the initial scheme from the saved preference, falling back
+        // to the live system appearance when following the system.
+        let pref = UserDefaults.standard.string(forKey: WindowsServiceConst.themePreferenceKey)
+            .flatMap(ThemePreference.init(rawValue:)) ?? .system
+        let systemIsDark = window.traitCollection.userInterfaceStyle == .dark
+        switch pref {
+        case .light: self.colorScheme = .light
+        case .dark:  self.colorScheme = .dark
+        case .system: self.colorScheme = systemIsDark ? .systemDark : .systemLight
+        }
 
         launchVC = LaunchViewController()
 
         window.backgroundColor = .clear
-        switch self.colorScheme {
-        case .light:
-            window.overrideUserInterfaceStyle = .light
-        case .dark:
-            window.overrideUserInterfaceStyle = .dark
-        case .systemLight, .systemDark:
-            window.overrideUserInterfaceStyle = .unspecified
-        }
+        window.overrideUserInterfaceStyle = pref.overrideStyle
 
         super.init()
 
         launchVC.delegate = self
         window.rootViewController = launchVC
+    }
+
+    /// Re-applies the persisted theme preference to the window. `system`
+    /// follows the device appearance (`.unspecified`); `light`/`dark` force it.
+    func applyThemePreference() {
+        let pref = themePreference
+        window.overrideUserInterfaceStyle = pref.overrideStyle
+
+        let effectiveIsDark: Bool
+        switch pref {
+        case .light: effectiveIsDark = false
+        case .dark:  effectiveIsDark = true
+        case .system: effectiveIsDark = window.traitCollection.userInterfaceStyle == .dark
+        }
+
+        let resolved: ColorScheme = pref == .system
+            ? (effectiveIsDark ? .systemDark : .systemLight)
+            : (effectiveIsDark ? .dark : .light)
+
+        if resolved != colorScheme {
+            colorScheme = resolved
+            onColorSchemeChanged.invoke(colorScheme)
+        }
+    }
+
+    /// Persists a new theme preference and applies it immediately.
+    func setThemePreference(_ pref: ThemePreference) {
+        themePreference = pref
+        applyThemePreference()
     }
 
     func postInit() {
@@ -176,16 +310,13 @@ class WindowsService: NSObject, Service {
     }
 
     func updateColorScheme(to scheme: ColorScheme) {
-        colorScheme = scheme
+        // Bridge the legacy scheme-based API onto the persisted preference so
+        // both entry points stay in sync.
         switch scheme {
-        case .light:
-            window.overrideUserInterfaceStyle = .light
-        case .dark:
-            window.overrideUserInterfaceStyle = .dark
-        case .systemLight, .systemDark:
-            window.overrideUserInterfaceStyle = .unspecified
+        case .light:                    setThemePreference(.light)
+        case .dark:                     setThemePreference(.dark)
+        case .systemLight, .systemDark: setThemePreference(.system)
         }
-        onColorSchemeChanged.invoke(colorScheme)
     }
 
     func showViewController(vc: UIViewController, animated: Bool = true, callback: (() -> Void)? = nil) {
@@ -219,23 +350,16 @@ class WindowsService: NSObject, Service {
 
 extension WindowsService: ColorSchemeDelegate {
     func onColorThemeChanged(to style: UIUserInterfaceStyle) {
-        switch colorScheme {
-        case .systemDark, .systemLight:
-            let color: ColorScheme = style == .dark ? .systemDark : .systemLight
-            if color != colorScheme {
-                colorScheme = color
-                onColorSchemeChanged.invoke(color)
-                switch color {
-                case .light:
-                    window.overrideUserInterfaceStyle = .light
-                case .dark:
-                    window.overrideUserInterfaceStyle = .dark
-                case .systemLight, .systemDark:
-                    window.overrideUserInterfaceStyle = .unspecified
-                }
-            }
-        default:
-            break
+        // Only react to system appearance changes while we're following the
+        // system. A forced light/dark preference ignores the device toggle.
+        guard themePreference == .system else { return }
+
+        let color: ColorScheme = style == .dark ? .systemDark : .systemLight
+        if color != colorScheme {
+            colorScheme = color
+            // Stay on `.unspecified` so the window keeps tracking the system.
+            window.overrideUserInterfaceStyle = .unspecified
+            onColorSchemeChanged.invoke(color)
         }
     }
 }

@@ -45,7 +45,7 @@ class ProfilePopoverController: UIViewController {
         schemeLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let segmentedControl = UISegmentedControl(items: ["Light", "Dark", "System"])
-        segmentedControl.selectedSegmentIndex = segmentIndex(for: colorScheme)
+        segmentedControl.selectedSegmentIndex = segmentIndex(for: windowService?.themePreference ?? .system)
         segmentedControl.addTarget(self, action: #selector(colorSchemeChanged(_:)), for: .valueChanged)
         segmentedControl.translatesAutoresizingMaskIntoConstraints = false
 
@@ -88,24 +88,22 @@ class ProfilePopoverController: UIViewController {
         ])
     }
 
-    private func segmentIndex(for scheme: ColorScheme) -> Int {
-        switch scheme {
-        case .light:                    return 0
-        case .dark:                     return 1
-        case .systemLight, .systemDark: return 2
+    private func segmentIndex(for pref: ThemePreference) -> Int {
+        switch pref {
+        case .light:  return 0
+        case .dark:   return 1
+        case .system: return 2
         }
     }
 
     @objc private func colorSchemeChanged(_ sender: UISegmentedControl) {
-        let scheme: ColorScheme
+        let pref: ThemePreference
         switch sender.selectedSegmentIndex {
-        case 0:  scheme = .light
-        case 1:  scheme = .dark
-        default:
-            let isDark = traitCollection.userInterfaceStyle == .dark
-            scheme = isDark ? .systemDark : .systemLight
+        case 0:  pref = .light
+        case 1:  pref = .dark
+        default: pref = .system
         }
-        windowService?.updateColorScheme(to: scheme)
+        windowService?.setThemePreference(pref)
     }
 
     @objc private func logoutTapped() {

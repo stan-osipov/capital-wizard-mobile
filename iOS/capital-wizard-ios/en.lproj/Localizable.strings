@@ -32,6 +32,11 @@
 "reset.success_title" = "Check your inbox!";
 "reset.success_description" = "We've sent a password reset link to your email.";
 
+/* Shared Social Buttons (design system) */
+"social.google" = "Continue with Google";
+"social.apple" = "Continue with Apple";
+"auth.divider" = "OR CONTINUE WITH";
+
 /* Shared Fields */
 "field.email" = "Email Address";
 "field.password" = "Password";
@@ -52,3 +57,6 @@
 
 /* Language Picker */
 "language.cancel" = "Cancel";
+
+/* Boot Loader */
+"loader.caption" = "Crunching the numbers";

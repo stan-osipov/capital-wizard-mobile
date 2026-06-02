@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DARK palette. The LIGHT variant lives in values/colors.xml.
+         Keep the SAME resource names in both files so the DayNight theme
+         swaps them automatically. Matches web + iOS dark palette. -->
+
+    <color name="background">#FF121317</color>
+    <color name="surface">#FF1A1B20</color>
+    <color name="surface_2">#FF1F2025</color>
+    <color name="surface_hover">#FF25272C</color>
+
+    <color name="border">#FF2C2E34</color>
+    <color name="border_strong">#FF3A3D44</color>
+
+    <color name="text_primary">#FFF2F3F4</color>
+    <color name="text_secondary">#FFA6AAB2</color>
+    <color name="text_subtle">#FF7C808A</color>
+
+    <color name="accent">#FFFBBF24</color>
+    <color name="accent_soft">#33FBBF24</color>
+    <color name="on_accent">#FF211A0E</color>
+
+    <!-- Primary button: text-fill flips with night mode -->
+    <color name="btn_primary_fill">#FFF2F3F4</color>
+    <color name="btn_primary_label">#FF121317</color>
+
+    <color name="success_green">#FF22C55E</color>
+    <color name="error_red">#FFEF4444</color>
+
+    <!-- Back-compat aliases for any legacy references -->
+    <color name="card_background">@color/surface</color>
+    <color name="card_border">@color/border</color>
+    <color name="input_background">@color/surface_2</color>
+    <color name="input_border">@color/border_strong</color>
+    <color name="link_color">@color/accent</color>
+    <color name="gradient_primary">@color/accent</color>
+    <color name="gradient_secondary">@color/accent</color>
+    <color name="separator">@color/border</color>
+    <color name="tab_bar">@color/surface</color>
+</resources>

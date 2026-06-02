@@ -2,30 +2,77 @@
 //  SplashAnimationView.swift
 //  capital-wizard-ios
 //
+//  "Line Draw" boot loader — the Capital Wizard W mark plotted as a rising
+//  chart line. A faint full W (track) sits underneath; an amber stroke draws
+//  itself along it, holds, fades, and repeats. Wordmark + a mono status
+//  caption sit below. Theme-aware (light + dark) via the design-system tokens.
+//
+//  Source of truth: design_handoff_loader/ (README.md + "Line Draw Loader.html").
+//
 
 import UIKit
 
 class SplashAnimationView: UIView {
 
-    // MARK: - Colors
+    // MARK: - Geometry constants
 
-    private let purple   = UIColor(red: 139/255, green: 92/255,  blue: 246/255, alpha: 1)
-    private let indigo   = UIColor(red: 99/255,  green: 102/255, blue: 241/255, alpha: 1)
-    private let violet   = UIColor(red: 168/255, green: 85/255,  blue: 247/255, alpha: 1)
-    private let slate900 = UIColor(red: 15/255,  green: 23/255,  blue: 42/255,  alpha: 1)
+    /// The W mark, traced from the app icon, on a 0–100 coordinate space.
+    /// M13 45 L31 83 L45 34 L63.5 66 L87 18 — an asymmetric, upward-trending
+    /// chart zig-zag (NOT a symmetric W).
+    private static let markPoints: [CGPoint] = [
+        CGPoint(x: 13,   y: 45),
+        CGPoint(x: 31,   y: 83),
+        CGPoint(x: 45,   y: 34),
+        CGPoint(x: 63.5, y: 66),
+        CGPoint(x: 87,   y: 18)
+    ]
+
+    /// 118pt mark centered in a 130pt box.
+    private static let boxSize: CGFloat   = 130
+    private static let markSize: CGFloat  = 118
+    /// Stroke width 6 in the 0–100 space, scaled to the box.
+    private static let baseStrokeWidth: CGFloat = 6
+
+    /// 2.4s draw loop, cubic-bezier(0.65, 0, 0.35, 1), infinite.
+    private static let drawDuration: CFTimeInterval = 2.4
+    /// Trailing dots cycle.
+    private static let dotsInterval: TimeInterval = 1.4
 
     let createdAt = CACurrentMediaTime()
 
-    // MARK: - Animated view references
+    // MARK: - Layer / view references
 
-    private var ambientView: UIView?
-    private var ringViews: [UIView] = []
-    private var orbitView1: UIView?
-    private var orbitView2: UIView?
-    private var iconView: UIView?
-    private var titleLabel: UILabel?
+    private let markContainer = UIView()
+    private let trackLayer = CAShapeLayer()
+    private let lineLayer  = CAShapeLayer()
+    private let wordmarkLabel = UILabel()
     private var statusLabel: UILabel?
+    /// Separate label for the animated trailing dots so the cycling timer never
+    /// fights the status text driven through `postStatus`.
+    private let dotsLabel = UILabel()
+
+    private var dotsTimer: Timer?
+    private var dotsStep = 0
     private var stopped = false
+
+    /// The draw loop starts exactly once, after the view is in a window and the
+    /// shape layers have real geometry — so the first cycle can't be interrupted
+    /// by an early (path-less) start or a second lifecycle callback.
+    private var didStartDraw = false
+    private var lastLaidOutBounds: CGRect = .zero
+
+    // MARK: - Theme
+
+    /// Resolve the effective interface style from the view's own trait
+    /// collection, falling back to the window when the preference is `.system`.
+    private var effectiveStyle: UIUserInterfaceStyle {
+        if traitCollection.userInterfaceStyle != .unspecified {
+            return traitCollection.userInterfaceStyle
+        }
+        return window?.traitCollection.userInterfaceStyle ?? .dark
+    }
+
+    private var colors: AppColors { AppColors.colors(for: effectiveStyle) }
 
     // MARK: - Status updates
 
@@ -50,6 +97,7 @@ class SplashAnimationView: UIView {
     }
 
     deinit {
+        dotsTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -58,8 +106,9 @@ class SplashAnimationView: UIView {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if window != nil && !stopped {
-            applyAnimations()
-            // Re-apply animations when app returns from background
+            applyThemeColors()
+            startDrawIfNeeded()
+            // Re-apply animations when the app returns from background.
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(onForeground),
@@ -77,224 +126,103 @@ class SplashAnimationView: UIView {
 
     @objc private func onForeground() {
         guard !stopped else { return }
-        // Small delay to let the system settle after foregrounding
+        // Small delay to let the system settle after foregrounding.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.applyAnimations()
+            guard let self = self, !self.stopped else { return }
+            // Only resume if the draw was actually cleared (e.g. the system
+            // removed it during a real background trip). Never restart an
+            // in-flight cycle — that's what made the first run stutter.
+            if self.lineLayer.animation(forKey: "cwDraw") == nil {
+                self.applyAnimations()
+            }
         }
     }
 
     // MARK: - Build views (no animations here)
 
     private func buildUI() {
-        backgroundColor = slate900
+        backgroundColor = colors.dsBackground
 
-        // ── Ambient background glow ──
-        let ambientSize: CGFloat = 400
-        let ambient = UIView()
-        ambient.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(ambient)
-        ambientView = ambient
+        // ── Mark container (130pt box, centered, lifted to leave room for the
+        //    wordmark + caption below) ──
+        markContainer.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(markContainer)
 
-        NSLayoutConstraint.activate([
-            ambient.centerXAnchor.constraint(equalTo: centerXAnchor),
-            ambient.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -40),
-            ambient.widthAnchor.constraint(equalToConstant: ambientSize),
-            ambient.heightAnchor.constraint(equalToConstant: ambientSize)
-        ])
+        // Track: faint full W underneath.
+        trackLayer.fillColor = UIColor.clear.cgColor
+        trackLayer.lineCap = .round
+        trackLayer.lineJoin = .round
 
-        let ag = CAGradientLayer()
-        ag.type = .radial
-        ag.colors = [
-            purple.withAlphaComponent(0.18).cgColor,
-            indigo.withAlphaComponent(0.07).cgColor,
-            UIColor.clear.cgColor
-        ]
-        ag.locations = [0, 0.5, 1]
-        ag.startPoint = CGPoint(x: 0.5, y: 0.5)
-        ag.endPoint = CGPoint(x: 1, y: 1)
-        ag.frame = CGRect(x: 0, y: 0, width: ambientSize, height: ambientSize)
-        ambient.layer.addSublayer(ag)
+        // Line: amber W that draws itself.
+        lineLayer.fillColor = UIColor.clear.cgColor
+        lineLayer.lineCap = .round
+        lineLayer.lineJoin = .round
+        lineLayer.strokeEnd = 0
+        // Amber glow ≈ CSS drop-shadow(0 0 6px var(--accent-soft)).
+        lineLayer.shadowRadius = 6
+        lineLayer.shadowOpacity = 1
+        lineLayer.shadowOffset = .zero
 
-        // ── Logo container ──
-        let logoSize: CGFloat = 160
-        let logoContainer = UIView()
-        logoContainer.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(logoContainer)
+        markContainer.layer.addSublayer(trackLayer)
+        markContainer.layer.addSublayer(lineLayer)
 
-        NSLayoutConstraint.activate([
-            logoContainer.centerXAnchor.constraint(equalTo: centerXAnchor),
-            logoContainer.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -40),
-            logoContainer.widthAnchor.constraint(equalToConstant: logoSize),
-            logoContainer.heightAnchor.constraint(equalToConstant: logoSize)
-        ])
+        // ── Wordmark "Capital Wizard": 21pt semibold, letter-spacing -0.01 ──
+        wordmarkLabel.attributedText = makeWordmarkText()
+        wordmarkLabel.textAlignment = .center
+        wordmarkLabel.numberOfLines = 1
+        wordmarkLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(wordmarkLabel)
 
-        // ── Ripple pulse rings ──
-        let ringBase: CGFloat = 100
-        for _ in 0..<3 {
-            let ringView = UIView()
-            ringView.translatesAutoresizingMaskIntoConstraints = false
-            logoContainer.addSubview(ringView)
-
-            NSLayoutConstraint.activate([
-                ringView.centerXAnchor.constraint(equalTo: logoContainer.centerXAnchor),
-                ringView.centerYAnchor.constraint(equalTo: logoContainer.centerYAnchor),
-                ringView.widthAnchor.constraint(equalToConstant: ringBase),
-                ringView.heightAnchor.constraint(equalToConstant: ringBase)
-            ])
-
-            let shape = CAShapeLayer()
-            shape.path = UIBezierPath(ovalIn: CGRect(x: 0, y: 0,
-                                                      width: ringBase, height: ringBase)).cgPath
-            shape.fillColor = UIColor.clear.cgColor
-            shape.strokeColor = purple.withAlphaComponent(0.35).cgColor
-            shape.lineWidth = 1.5
-            ringView.layer.addSublayer(shape)
-
-            ringViews.append(ringView)
-        }
-
-        // ── Orbital gradient arc ──
-        let orbitSize: CGFloat = 136
-
-        let ov1 = UIView()
-        ov1.translatesAutoresizingMaskIntoConstraints = false
-        logoContainer.addSubview(ov1)
-        orbitView1 = ov1
-
-        NSLayoutConstraint.activate([
-            ov1.centerXAnchor.constraint(equalTo: logoContainer.centerXAnchor),
-            ov1.centerYAnchor.constraint(equalTo: logoContainer.centerYAnchor),
-            ov1.widthAnchor.constraint(equalToConstant: orbitSize),
-            ov1.heightAnchor.constraint(equalToConstant: orbitSize)
-        ])
-
-        let arcPath = UIBezierPath(arcCenter: CGPoint(x: orbitSize / 2, y: orbitSize / 2),
-                                    radius: orbitSize / 2,
-                                    startAngle: 0,
-                                    endAngle: .pi * 2,
-                                    clockwise: true).cgPath
-
-        let arc1 = CAShapeLayer()
-        arc1.path = arcPath
-        arc1.fillColor = UIColor.clear.cgColor
-        arc1.lineWidth = 2.5
-        arc1.lineCap = .round
-        arc1.strokeStart = 0
-        arc1.strokeEnd = 0.22
-
-        let grad1 = CAGradientLayer()
-        grad1.frame = CGRect(x: 0, y: 0, width: orbitSize, height: orbitSize)
-        grad1.colors = [purple.cgColor, indigo.cgColor, violet.cgColor]
-        grad1.startPoint = CGPoint(x: 0, y: 0)
-        grad1.endPoint = CGPoint(x: 1, y: 1)
-        grad1.mask = arc1
-        ov1.layer.addSublayer(grad1)
-
-        // Second arc
-        let ov2 = UIView()
-        ov2.translatesAutoresizingMaskIntoConstraints = false
-        logoContainer.addSubview(ov2)
-        orbitView2 = ov2
-
-        NSLayoutConstraint.activate([
-            ov2.centerXAnchor.constraint(equalTo: logoContainer.centerXAnchor),
-            ov2.centerYAnchor.constraint(equalTo: logoContainer.centerYAnchor),
-            ov2.widthAnchor.constraint(equalToConstant: orbitSize),
-            ov2.heightAnchor.constraint(equalToConstant: orbitSize)
-        ])
-
-        let arc2 = CAShapeLayer()
-        arc2.path = arcPath
-        arc2.fillColor = UIColor.clear.cgColor
-        arc2.lineWidth = 1.5
-        arc2.lineCap = .round
-        arc2.strokeStart = 0
-        arc2.strokeEnd = 0.15
-
-        let grad2 = CAGradientLayer()
-        grad2.frame = CGRect(x: 0, y: 0, width: orbitSize, height: orbitSize)
-        grad2.colors = [violet.cgColor, purple.withAlphaComponent(0.4).cgColor]
-        grad2.startPoint = CGPoint(x: 1, y: 0)
-        grad2.endPoint = CGPoint(x: 0, y: 1)
-        grad2.mask = arc2
-        ov2.layer.addSublayer(grad2)
-
-        // ── Center "$" icon ──
-        let iconSize: CGFloat = 64
-        let iv = UIView()
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        iv.clipsToBounds = false
-        logoContainer.addSubview(iv)
-        iconView = iv
-
-        let gradient = CAGradientLayer()
-        gradient.colors = [purple.cgColor, indigo.cgColor]
-        gradient.startPoint = CGPoint(x: 0, y: 0)
-        gradient.endPoint = CGPoint(x: 1, y: 1)
-        gradient.frame = CGRect(x: 0, y: 0, width: iconSize, height: iconSize)
-        gradient.cornerRadius = 18
-        iv.layer.insertSublayer(gradient, at: 0)
-
-        iv.layer.shadowColor = purple.cgColor
-        iv.layer.shadowOffset = .zero
-        iv.layer.shadowRadius = 28
-        iv.layer.shadowOpacity = 0.7
-
-        let symbol = UILabel()
-        symbol.text = "$"
-        symbol.font = .systemFont(ofSize: 32, weight: .bold)
-        symbol.textColor = .white
-        symbol.textAlignment = .center
-        symbol.translatesAutoresizingMaskIntoConstraints = false
-        iv.addSubview(symbol)
-
-        NSLayoutConstraint.activate([
-            iv.centerXAnchor.constraint(equalTo: logoContainer.centerXAnchor),
-            iv.centerYAnchor.constraint(equalTo: logoContainer.centerYAnchor),
-            iv.widthAnchor.constraint(equalToConstant: iconSize),
-            iv.heightAnchor.constraint(equalToConstant: iconSize),
-            symbol.centerXAnchor.constraint(equalTo: iv.centerXAnchor),
-            symbol.centerYAnchor.constraint(equalTo: iv.centerYAnchor)
-        ])
-
-        // ── Title ──
-        let title = UILabel()
-        let attributed = NSAttributedString(
-            string: "Capital Wizard",
-            attributes: [
-                .kern: 4.0,
-                .font: UIFont.systemFont(ofSize: 26, weight: .light),
-                .foregroundColor: UIColor.white.withAlphaComponent(0.9)
-            ]
-        )
-        title.attributedText = attributed
-        title.textAlignment = .center
-        title.translatesAutoresizingMaskIntoConstraints = false
-        title.alpha = 0
-        addSubview(title)
-        titleLabel = title
-
-        NSLayoutConstraint.activate([
-            title.topAnchor.constraint(equalTo: logoContainer.bottomAnchor, constant: 28),
-            title.centerXAnchor.constraint(equalTo: centerXAnchor)
-        ])
-
-        // ── Status label ──
+        // ── Status caption row: status text + animated trailing dots ──
         let status = UILabel()
-        status.text = ""
-        status.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        status.textColor = UIColor.white.withAlphaComponent(0.35)
-        status.textAlignment = .center
+        status.text = defaultCaption()
+        status.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        status.textColor = colors.dsTextSubtle
+        status.textAlignment = .right
         status.numberOfLines = 1
-        status.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(status)
+        status.setContentHuggingPriority(.required, for: .horizontal)
+        status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         statusLabel = status
 
+        dotsLabel.text = UIAccessibility.isReduceMotionEnabled ? "\u{2026}" : ""
+        dotsLabel.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        dotsLabel.textColor = colors.dsTextSubtle
+        dotsLabel.textAlignment = .left
+        dotsLabel.numberOfLines = 1
+        dotsLabel.setContentHuggingPriority(.required, for: .horizontal)
+        dotsLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        // Hold the dots column at a fixed width so the centered status text
+        // doesn't shift as the dots cycle (· → ·· → ···).
+        let captionStack = UIStackView(arrangedSubviews: [status, dotsLabel])
+        captionStack.axis = .horizontal
+        captionStack.alignment = .firstBaseline
+        captionStack.spacing = 0
+        captionStack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(captionStack)
+
         NSLayoutConstraint.activate([
-            status.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -48),
-            status.centerXAnchor.constraint(equalTo: centerXAnchor),
-            status.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
-            status.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24)
+            // Mark box: centered horizontally, slightly above center so the
+            // wordmark below keeps the group visually balanced.
+            markContainer.centerXAnchor.constraint(equalTo: centerXAnchor),
+            markContainer.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -28),
+            markContainer.widthAnchor.constraint(equalToConstant: Self.boxSize),
+            markContainer.heightAnchor.constraint(equalToConstant: Self.boxSize),
+
+            // Wordmark: 40pt below the mark.
+            wordmarkLabel.topAnchor.constraint(equalTo: markContainer.bottomAnchor, constant: 40),
+            wordmarkLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            wordmarkLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
+            wordmarkLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24),
+
+            // Caption: pinned ~54pt above the bottom safe-area, centered.
+            captionStack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            captionStack.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -54),
+            captionStack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
+            captionStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24),
+
+            // Reserve a steady width for up to three dots.
+            dotsLabel.widthAnchor.constraint(equalToConstant: 22)
         ])
 
         NotificationCenter.default.addObserver(
@@ -305,6 +233,100 @@ class SplashAnimationView: UIView {
         )
     }
 
+    /// "Capital Wizard" — 21pt semibold, letter-spacing -0.01em (≈ -0.21pt at 21pt).
+    private func makeWordmarkText() -> NSAttributedString {
+        NSAttributedString(
+            string: "Capital Wizard",
+            attributes: [
+                .font: UIFont.systemFont(ofSize: 21, weight: .semibold),
+                .kern: -0.21,
+                .foregroundColor: colors.dsText
+            ]
+        )
+    }
+
+    /// Localized "Crunching the numbers" if the key exists, else the literal.
+    private func defaultCaption() -> String {
+        let key = "loader.caption"
+        let resolved = L(key)
+        // `L` returns the key itself when the string is missing.
+        return resolved == key ? "Crunching the numbers" : resolved
+    }
+
+    // MARK: - Geometry
+
+    /// Builds the W path scaled to a 118pt mark centered in the 130pt box.
+    private func makeMarkPath() -> CGPath {
+        let scale = Self.markSize / 100.0          // 0–100 space → 118pt
+        let inset = (Self.boxSize - Self.markSize) / 2  // center in the box
+        let path = UIBezierPath()
+        for (i, p) in Self.markPoints.enumerated() {
+            let point = CGPoint(x: inset + p.x * scale, y: inset + p.y * scale)
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        return path.cgPath
+    }
+
+    // MARK: - Layout
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // (Re)build the shape only when the box geometry actually changes, so a
+        // routine layout pass never disturbs an in-flight draw.
+        let bounds = markContainer.bounds
+        if bounds != lastLaidOutBounds {
+            lastLaidOutBounds = bounds
+            let width = Self.baseStrokeWidth * (Self.markSize / 100.0)  // stroke 6 scaled
+            let path = makeMarkPath()
+            for layer in [trackLayer, lineLayer] {
+                layer.frame = bounds
+                layer.path = path
+                layer.lineWidth = width
+            }
+        }
+
+        // The path is ready now — safe to begin the draw (runs once).
+        startDrawIfNeeded()
+    }
+
+    /// Begins the draw loop the first time the view is both in a window and laid
+    /// out with real geometry. The `didStartDraw` guard prevents a second
+    /// lifecycle callback (re-layout / re-attach / a launch-time foreground
+    /// event) from wiping the partial first cycle and restarting it.
+    private func startDrawIfNeeded() {
+        guard !stopped, !didStartDraw, window != nil, markContainer.bounds.width > 0 else { return }
+        didStartDraw = true
+        applyAnimations()
+    }
+
+    // MARK: - Theme colors
+
+    /// Applies every directly-set color from the resolved palette. Safe to call
+    /// repeatedly (initial build, window attach, and live appearance changes).
+    private func applyThemeColors() {
+        let colors = self.colors
+        backgroundColor = colors.dsBackground
+
+        trackLayer.strokeColor = colors.dsBorder.cgColor
+        lineLayer.strokeColor  = colors.dsAccent.cgColor
+        lineLayer.shadowColor  = colors.dsAccentSoft.cgColor
+
+        wordmarkLabel.attributedText = makeWordmarkText()
+        statusLabel?.textColor = colors.dsTextSubtle
+        dotsLabel.textColor = colors.dsTextSubtle
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            applyThemeColors()
+        }
+    }
+
     @objc private func onStatusUpdate(_ notification: Notification) {
         guard let text = notification.userInfo?["text"] as? String else { return }
         statusLabel?.text = text
@@ -313,101 +335,73 @@ class SplashAnimationView: UIView {
     // MARK: - Apply animations (called when in window hierarchy)
 
     private func applyAnimations() {
-        // Ambient breathe
-        if let ambient = ambientView {
-            ambient.layer.removeAllAnimations()
-            let breathe = CABasicAnimation(keyPath: "transform.scale")
-            breathe.fromValue = 0.85
-            breathe.toValue = 1.2
-            breathe.duration = 4.0
-            breathe.autoreverses = true
-            breathe.repeatCount = .infinity
-            breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            ambient.layer.add(breathe, forKey: "breathe")
+        lineLayer.removeAllAnimations()
+
+        // Reduced motion: show the completed amber W, no draw loop, static "…".
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            lineLayer.strokeEnd = 1
+            lineLayer.opacity = 1
+            dotsTimer?.invalidate()
+            dotsTimer = nil
+            dotsLabel.text = "\u{2026}"
+            return
         }
 
-        // Ripple rings
-        for (i, ringView) in ringViews.enumerated() {
-            ringView.layer.removeAllAnimations()
+        // Grouped keyframe draw: strokeEnd 0→1 over the first 55%, hold drawn
+        // until 80%, then fade opacity 1→0 by 100%. `strokeEnd` is the UIKit
+        // equivalent of the handoff's stroke-dashoffset draw.
+        let timing = CAMediaTimingFunction(controlPoints: 0.65, 0, 0.35, 1)
 
-            let scaleAnim = CABasicAnimation(keyPath: "transform.scale")
-            scaleAnim.fromValue = 0.6
-            scaleAnim.toValue = 2.8
-            scaleAnim.duration = 3.0
+        // Per-segment easing: a CAKeyframeAnimation ignores a single
+        // `timingFunction` (its segments would interpolate linearly). Supplying
+        // a `timingFunctions` array (one per segment, count == keyTimes - 1)
+        // applies the cubic-bezier to each segment — matching how the CSS
+        // `animation-timing-function` eases between every keyframe in the handoff.
+        let draw = CAKeyframeAnimation(keyPath: "strokeEnd")
+        draw.values = [0, 1, 1]
+        draw.keyTimes = [0, 0.55, 1]
+        draw.timingFunctions = [timing, timing]
 
-            let fadeAnim = CABasicAnimation(keyPath: "opacity")
-            fadeAnim.fromValue = 0.7
-            fadeAnim.toValue = 0.0
-            fadeAnim.duration = 3.0
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [1, 1, 0]
+        fade.keyTimes = [0, 0.8, 1]
+        fade.timingFunctions = [timing, timing]
 
-            let group = CAAnimationGroup()
-            group.animations = [scaleAnim, fadeAnim]
-            group.duration = 3.0
-            group.repeatCount = .infinity
-            group.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            group.timeOffset = Double(i) * 1.0
-            ringView.layer.add(group, forKey: "ripple")
+        let group = CAAnimationGroup()
+        group.animations = [draw, fade]
+        group.duration = Self.drawDuration
+        group.repeatCount = .infinity
+        group.isRemovedOnCompletion = false
+        group.fillMode = .both
+        lineLayer.add(group, forKey: "cwDraw")
+
+        startDotsTimer()
+    }
+
+    // MARK: - Trailing dots
+
+    private func startDotsTimer() {
+        dotsTimer?.invalidate()
+        dotsStep = 0
+        dotsLabel.text = ""
+        // 4-step cycle ("" → · → ·· → ···) over `dotsInterval`, matching the
+        // CSS steps(4, end) loop.
+        let timer = Timer.scheduledTimer(withTimeInterval: Self.dotsInterval / 4,
+                                         repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.dotsStep = (self.dotsStep + 1) % 4
+            self.dotsLabel.text = String(repeating: "\u{00b7}", count: self.dotsStep)
         }
-
-        // Orbit 1
-        if let ov1 = orbitView1 {
-            ov1.layer.removeAllAnimations()
-            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-            spin.fromValue = 0
-            spin.toValue = CGFloat.pi * 2
-            spin.duration = 3.0
-            spin.repeatCount = .infinity
-            spin.timingFunction = CAMediaTimingFunction(name: .linear)
-            ov1.layer.add(spin, forKey: "orbit")
-        }
-
-        // Orbit 2
-        if let ov2 = orbitView2 {
-            ov2.layer.removeAllAnimations()
-            let spin2 = CABasicAnimation(keyPath: "transform.rotation.z")
-            spin2.fromValue = 0
-            spin2.toValue = -CGFloat.pi * 2
-            spin2.duration = 4.5
-            spin2.repeatCount = .infinity
-            spin2.timingFunction = CAMediaTimingFunction(name: .linear)
-            ov2.layer.add(spin2, forKey: "orbit2")
-        }
-
-        // Icon float + glow
-        if let iv = iconView {
-            iv.layer.removeAllAnimations()
-
-            let float = CABasicAnimation(keyPath: "transform.translation.y")
-            float.fromValue = -5
-            float.toValue = 5
-            float.duration = 2.5
-            float.autoreverses = true
-            float.repeatCount = .infinity
-            float.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            iv.layer.add(float, forKey: "float")
-
-            let glow = CABasicAnimation(keyPath: "shadowRadius")
-            glow.fromValue = 22
-            glow.toValue = 38
-            glow.duration = 2.5
-            glow.autoreverses = true
-            glow.repeatCount = .infinity
-            glow.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            iv.layer.add(glow, forKey: "glow")
-        }
-
-        // Title fade in
-        if let title = titleLabel, title.alpha < 1 {
-            UIView.animate(withDuration: 0.8, delay: 0.2, options: .curveEaseOut) {
-                title.alpha = 1
-            }
-        }
+        RunLoop.main.add(timer, forMode: .common)
+        dotsTimer = timer
     }
 
     // MARK: - Cleanup
 
     func stopAllAnimations() {
         stopped = true
+        dotsTimer?.invalidate()
+        dotsTimer = nil
         NotificationCenter.default.removeObserver(self)
         func strip(_ v: UIView) {
             v.layer.removeAllAnimations()

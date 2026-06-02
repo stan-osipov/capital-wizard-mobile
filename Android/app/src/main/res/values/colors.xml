@@ -1,22 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Matches iOS dark theme colors from AppColors -->
-    <color name="background">#FF0F1729</color>
-    <color name="card_background">#FF1E293B</color>
-    <color name="card_border">#FF334155</color>
-    <color name="input_background">#FF1E293B</color>
-    <color name="input_border">#FF475569</color>
+    <!-- LIGHT palette. The DARK variant lives in values-night/colors.xml.
+         Keep the SAME resource names in both files so the DayNight theme
+         swaps them automatically. Matches web + iOS light palette. -->
 
-    <color name="text_primary">#FFFFFFFF</color>
-    <color name="text_secondary">#FF94A3B8</color>
-    <color name="link_color">#FF8B5CF6</color>
+    <color name="background">#FFFAFAFB</color>
+    <color name="surface">#FFFFFFFF</color>
+    <color name="surface_2">#FFF3F4F6</color>
+    <color name="surface_hover">#FFECEEF0</color>
 
-    <color name="gradient_primary">#FF8B5CF6</color>
-    <color name="gradient_secondary">#FFA855F7</color>
+    <color name="border">#FFE5E7E9</color>
+    <color name="border_strong">#FFD5D8DB</color>
+
+    <color name="text_primary">#FF1B1D23</color>
+    <color name="text_secondary">#FF696D77</color>
+    <color name="text_subtle">#FF8C9099</color>
+
+    <color name="accent">#FFF59E0B</color>
+    <color name="accent_soft">#29F59E0B</color>
+    <color name="on_accent">#FFFFFFFF</color>
+
+    <!-- Primary button: text-fill flips with night mode -->
+    <color name="btn_primary_fill">#FF1B1D23</color>
+    <color name="btn_primary_label">#FFFAFAFB</color>
 
     <color name="success_green">#FF22C55E</color>
     <color name="error_red">#FFEF4444</color>
 
-    <color name="separator">#FF038C8C</color>
-    <color name="tab_bar">#FF0F182B</color>
+    <!-- Back-compat aliases for any legacy references -->
+    <color name="card_background">@color/surface</color>
+    <color name="card_border">@color/border</color>
+    <color name="input_background">@color/surface_2</color>
+    <color name="input_border">@color/border_strong</color>
+    <color name="link_color">@color/accent</color>
+    <color name="gradient_primary">@color/accent</color>
+    <color name="gradient_secondary">@color/accent</color>
+    <color name="separator">@color/border</color>
+    <color name="tab_bar">@color/surface</color>
 </resources>

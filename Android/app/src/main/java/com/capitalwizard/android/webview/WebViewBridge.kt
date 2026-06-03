@@ -5,6 +5,7 @@ import android.webkit.WebView
 import com.capitalwizard.android.services.AuthService
 import com.capitalwizard.android.utils.Event
 import com.capitalwizard.android.utils.ServiceManager
+import com.capitalwizard.android.utils.ThemePrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +42,61 @@ class WebViewBridge {
         document.documentElement.classList.add('cw-native-android');
     """.trimIndent()
 
+    /**
+     * Native → web (pre-paint seed). Writes the saved web theme/accent into localStorage so
+     * the page's inline pre-paint script (in index.html) picks them up and paints the correct
+     * theme on first frame. Must run as early as possible — ideally at document start
+     * ([android.webkit.WebViewClient.onPageStarted]) so it beats the inline script.
+     *
+     * Returns an empty string when nothing has been saved yet (first run before the user has
+     * ever changed the theme), so the page falls through to its own default ("auto").
+     *
+     * Values are escaped via [JSONObject.quote], which yields a quoted JS string literal.
+     */
+    fun getThemeSeedScript(): String {
+        val context = webView?.context ?: return ""
+        val mode = ThemePrefs.getWebTheme(context)
+        val accent = ThemePrefs.getWebAccent(context)
+        if (mode.isNullOrBlank() && accent.isNullOrBlank()) return ""
+
+        val sets = buildString {
+            if (!mode.isNullOrBlank()) {
+                append("localStorage.setItem('cw-theme', ${JSONObject.quote(mode)});")
+            }
+            if (!accent.isNullOrBlank()) {
+                append("localStorage.setItem('cw-accent', ${JSONObject.quote(accent)});")
+            }
+        }
+        return "(function(){try{$sets}catch(e){}})();"
+    }
+
+    /**
+     * Native → web (post-load fallback). Pushes the saved theme/accent through the web's
+     * runtime hook `window.__capital_wizard.theme({ mode, accent })`, which applies it live
+     * (no reload). Used after [android.webkit.WebViewClient.onPageFinished] in case the
+     * pre-paint seed landed a hair too late. No-op (empty string) when nothing is saved.
+     *
+     * The call is guarded so it silently does nothing until the web has installed the real
+     * `__capital_wizard.theme` handler (it is exposed by nativeBridge.ts on module load).
+     */
+    fun getThemePushScript(): String {
+        val context = webView?.context ?: return ""
+        val mode = ThemePrefs.getWebTheme(context)
+        val accent = ThemePrefs.getWebAccent(context)
+        if (mode.isNullOrBlank() && accent.isNullOrBlank()) return ""
+
+        val payload = JSONObject().apply {
+            if (!mode.isNullOrBlank()) put("mode", mode)
+            if (!accent.isNullOrBlank()) put("accent", accent)
+        }
+        return """
+            (function(){try{
+                var cw = window.__capital_wizard;
+                if (cw && typeof cw.theme === 'function') { cw.theme($payload); }
+            }catch(e){}})();
+        """.trimIndent()
+    }
+
     fun getZoomDisableScript(): String = """
         var meta = document.createElement('meta');
         meta.name = 'viewport';
@@ -57,10 +113,31 @@ class WebViewBridge {
             val type = json.optString("type")
             when (type) {
                 "system" -> parseSystemMessage(json)
+                "theme" -> parseThemeMessage(json)
                 "auth" -> { /* reserved */ }
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    /**
+     * Web → native: { type: "theme", mode: "<light|dark|dark-soft|auto>", accent: "<id>" }.
+     *
+     * Persists the verbatim web values and mirrors the mode onto the native night mode.
+     * This callback runs on a binder thread, so the [ThemePrefs.setFromWeb] call (which
+     * eventually touches [androidx.appcompat.app.AppCompatDelegate]) is hopped onto the
+     * WebView's main thread via [WebView.post] — the same pattern used for auth injection.
+     */
+    private fun parseThemeMessage(json: JSONObject) {
+        val mode = json.optString("mode").takeIf { it.isNotBlank() }
+        val accent = json.optString("accent").takeIf { it.isNotBlank() }
+        if (mode == null && accent == null) return
+
+        val wv = webView ?: return
+        val context = wv.context ?: return
+        wv.post {
+            ThemePrefs.setFromWeb(context, mode, accent)
         }
     }
 

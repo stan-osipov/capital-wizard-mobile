@@ -138,7 +138,17 @@ class WebViewApplication: NSObject, Application {
     }
 
     
+    /// Runtime native → web push. When the native theme changes while running
+    /// (e.g. the ProfilePopover Light/Dark/System control, or a system
+    /// appearance flip while following the system), persist the equivalent web
+    /// mode and push it into the live WebView so both stay in sync.
     private func updateWebViewColorScheme(to scheme: ColorScheme) {
+        guard let windowsService = windowsService else { return }
+        // Prefer the saved exact web string when it still maps to the current
+        // preference so a `dark-soft` choice isn't flattened to `dark`.
+        let mode = windowsService.webModeForCurrentPreference
+        windowsService.savedWebTheme = mode
+        webViewCommunication.pushTheme(mode: mode, accent: windowsService.savedWebAccent)
     }
 }
 
@@ -147,6 +157,9 @@ extension WebViewApplication: UrlFactory {
         let authService: AuthService? = ServiceManager.shared.getService()
         guard let session = try? await authService?.client.session else { return }
         await MainActor.run {
+            // Seed the theme/accent into localStorage BEFORE the page's
+            // pre-paint inline script runs (atDocumentStart), then inject auth.
+            webViewCommunication.addThemeSeedScript()
             webViewCommunication.addAuthScript(accessToken: session.accessToken, refreshToken: session.refreshToken)
         }
     }

@@ -61,6 +61,30 @@ enum ThemePreference: String {
         case .dark:   return .dark
         }
     }
+
+    /// Maps a web `mode` string onto the native preference.
+    /// `auto → .system`, `light → .light`, `dark`/`dark-soft → .dark`.
+    /// Note: `dark-soft` collapses to `.dark` here — the exact web string is
+    /// preserved separately in `WindowsServiceConst.webThemeKey`.
+    init(webMode: String) {
+        switch webMode {
+        case "light":            self = .light
+        case "dark", "dark-soft": self = .dark
+        default:                 self = .system   // "auto" and anything unknown
+        }
+    }
+
+    /// The web `mode` string that corresponds to this preference, used when the
+    /// native side drives the WebView. `.system → auto`. This is lossy for
+    /// `dark-soft` (becomes `dark`); callers that have a saved web string should
+    /// prefer it when it still resolves back to the same preference.
+    var webMode: String {
+        switch self {
+        case .system: return "auto"
+        case .light:  return "light"
+        case .dark:   return "dark"
+        }
+    }
 }
 
 /// Small hex convenience initialiser so the palette below reads exactly like
@@ -194,6 +218,12 @@ struct AppColors {
 struct WindowsServiceConst {
     static let colorSchemeKey   = "color_scheme"
     static let themePreferenceKey = "cw_theme_pref"
+    /// Exact web `mode` string (`light` | `dark` | `dark-soft` | `auto`) as last
+    /// reported by the WebView. Stored verbatim so it round-trips losslessly.
+    static let webThemeKey      = "cw_web_theme"
+    /// Web accent id (`amber` | `indigo` | … | `mono`) as last reported by the
+    /// WebView. Device-local preference, never the database.
+    static let webAccentKey     = "cw_web_accent"
     static let tabBarIconInsets = UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
 }
 
@@ -220,6 +250,55 @@ class WindowsService: NSObject, Service {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: WindowsServiceConst.themePreferenceKey)
         }
+    }
+
+    /// Exact web `mode` string last reported by / seeded into the WebView
+    /// (`light` | `dark` | `dark-soft` | `auto`). `nil` until the web reports
+    /// one. Used to seed `localStorage['cw-theme']` losslessly on launch.
+    var savedWebTheme: String? {
+        get { UserDefaults.standard.string(forKey: WindowsServiceConst.webThemeKey) }
+        set {
+            if let newValue = newValue {
+                UserDefaults.standard.set(newValue, forKey: WindowsServiceConst.webThemeKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: WindowsServiceConst.webThemeKey)
+            }
+        }
+    }
+
+    /// Web accent id last reported by the WebView (`amber` | … | `mono`).
+    /// `nil` until the web reports one. Seeds `localStorage['cw-accent']`.
+    var savedWebAccent: String? {
+        get { UserDefaults.standard.string(forKey: WindowsServiceConst.webAccentKey) }
+        set {
+            if let newValue = newValue {
+                UserDefaults.standard.set(newValue, forKey: WindowsServiceConst.webAccentKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: WindowsServiceConst.webAccentKey)
+            }
+        }
+    }
+
+    /// Persists the exact web theme/accent strings reported by the WebView and
+    /// mirrors the mode onto the native `ThemePreference` so the auth/splash
+    /// chrome matches. `accent` may be `nil` if the message omitted it.
+    func applyWebTheme(mode: String, accent: String?) {
+        savedWebTheme = mode
+        if let accent = accent, !accent.isEmpty {
+            savedWebAccent = accent
+        }
+        setThemePreference(ThemePreference(webMode: mode))
+    }
+
+    /// The web `mode` string to push when the native side changes the theme.
+    /// Prefers the saved web string when it still maps back to the current
+    /// preference (so a `dark-soft` choice survives a native dark/dark toggle).
+    var webModeForCurrentPreference: String {
+        let pref = themePreference
+        if let saved = savedWebTheme, ThemePreference(webMode: saved) == pref {
+            return saved
+        }
+        return pref.webMode
     }
 
     var colors: AppColors {

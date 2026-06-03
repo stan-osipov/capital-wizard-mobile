@@ -98,12 +98,28 @@ class WebViewActivity : AppCompatActivity() {
         bridge.webView = webView
 
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(
+                view: WebView?,
+                url: String?,
+                favicon: android.graphics.Bitmap?
+            ) {
+                super.onPageStarted(view, url, favicon)
+                // Seed saved theme/accent into localStorage BEFORE the page's inline
+                // pre-paint script reads it (avoids a theme flash).
+                val seed = bridge.getThemeSeedScript()
+                if (seed.isNotEmpty()) view?.evaluateJavascript(seed, null)
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 swipeRefresh.isRefreshing = false
 
                 // Inject native app identifier script
                 view?.evaluateJavascript(bridge.getNativeAppScript(), null)
+
+                // Fallback theme push in case the pre-paint seed landed late.
+                val push = bridge.getThemePushScript()
+                if (push.isNotEmpty()) view?.evaluateJavascript(push, null)
             }
 
             override fun shouldOverrideUrlLoading(
@@ -174,6 +190,10 @@ class WebViewActivity : AppCompatActivity() {
                             super.onPageStarted(view, url, favicon)
                             // Inject native platform identifier early
                             view?.evaluateJavascript(bridge.getNativeAppScript(), null)
+                            // Seed saved theme/accent into localStorage BEFORE the page's
+                            // inline pre-paint script reads it (avoids a theme flash).
+                            val seed = bridge.getThemeSeedScript()
+                            if (seed.isNotEmpty()) view?.evaluateJavascript(seed, null)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
@@ -198,6 +218,11 @@ class WebViewActivity : AppCompatActivity() {
 
                             // Inject zoom disable
                             view?.evaluateJavascript(bridge.getZoomDisableScript(), null)
+
+                            // Fallback theme push in case the pre-paint seed landed late:
+                            // applies the saved theme/accent live via __capital_wizard.theme.
+                            val push = bridge.getThemePushScript()
+                            if (push.isNotEmpty()) view?.evaluateJavascript(push, null)
                         }
 
                         override fun shouldOverrideUrlLoading(

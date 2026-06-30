@@ -6,17 +6,13 @@
     android:layout_height="match_parent"
     android:background="@color/background">
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipe_refresh"
+    <!-- The web app is a fixed app shell with its own scroll containers — the
+         WebView is locked (no pull-to-refresh; reload lives in the web app's
+         side menu instead). -->
+    <WebView
+        android:id="@+id/web_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <WebView
-            android:id="@+id/web_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        android:layout_height="match_parent" />
 
     <!-- Splash overlay -->
     <View

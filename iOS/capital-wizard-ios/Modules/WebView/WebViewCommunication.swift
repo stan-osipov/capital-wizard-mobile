@@ -84,6 +84,26 @@ class WebViewCommunication: NSObject {
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
+    /// Seeds every saved generic KV pair into `localStorage` BEFORE the page's
+    /// pre-paint script runs (same `.atDocumentStart` timing/rationale as
+    /// `addThemeSeedScript`), so the web `deviceStore` reads them back
+    /// transparently. Injects nothing when the store is empty.
+    func addKvSeedScript() {
+        guard let js = Self.kvSeedJS(DeviceKVStore.all()) else { return }
+        contentController.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    }
+
+    /// Builds the `localStorage`-seeding JS for the generic KV store. Both key
+    /// and value are escaped via `jsStringLiteral`, so arbitrary saved content
+    /// can never break out of the string literal. Returns `nil` when empty.
+    static func kvSeedJS(_ pairs: [String: String]) -> String? {
+        let lines: [String] = pairs.compactMap { key, value in
+            guard let k = jsStringLiteral(key), let v = jsStringLiteral(value) else { return nil }
+            return "try { localStorage.setItem(\(k), \(v)); } catch (e) {}"
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
     /// Produces a safe, double-quoted JS string literal for an arbitrary value
     /// by round-tripping it through `JSONSerialization` (JSON strings are valid
     /// JS string literals). Returns `nil` if serialization fails.
@@ -147,6 +167,8 @@ extension WebViewCommunication: WKScriptMessageHandler {
                 parseSystemResponse(dict)
             case .theme:
                 parseThemeResponse(dict)
+            case .kv:
+                parseKvResponse(dict)
             case .auth:
                 break
             }
@@ -163,12 +185,30 @@ extension WebViewCommunication: WKScriptMessageHandler {
             self?.windowsService?.applyWebTheme(mode: mode, accent: accent)
         }
     }
-    
+
+    /// Handles `{ type: "kv", action: "set"|"remove", key, value }` posted by the
+    /// web's `deviceStore`. Persists the pair verbatim so it can be re-seeded on
+    /// the next launch. `key` is the full `localStorage` key; `DeviceKVStore`
+    /// guards that it is within the `cw-kv:` namespace.
+    private func parseKvResponse(_ dict: Dictionary<String, Any>) {
+        guard let key = dict["key"] as? String, !key.isEmpty else { return }
+        let action = dict["action"] as? String ?? "set"
+        switch action {
+        case "remove":
+            DeviceKVStore.remove(key: key)
+        default:
+            guard let value = dict["value"] as? String else { return }
+            DeviceKVStore.set(key: key, value: value)
+        }
+    }
+
     private func parseSystemResponse(_ dict: Dictionary<String, Any>) {
         guard let eventName = dict["eventName"] as? String else {
             return
         }
-        
+
+        CWLog.shared.log("Bridge system event: \(eventName)", category: "Bridge")
+
         if eventName == "api-ready" {
             finilizeLoad()
         }
@@ -182,6 +222,47 @@ extension WebViewCommunication: WKScriptMessageHandler {
                 let authService: AuthService? = ServiceManager.shared.getService()
                 try? await authService?.signOut()
             }
+        }
+
+        if eventName == "request-logs" {
+            sendLogs(requestId: dict["requestId"])
+        }
+
+        if eventName == "open-external-url" {
+            openExternalUrl(dict["url"])
+        }
+    }
+
+    /// Opens a web-requested URL in the system (native map app, Safari, …) via
+    /// `UIApplication.open`. Restricted to http/https so the web bridge can never
+    /// trigger arbitrary custom-scheme deep links. Backs the address → "open in
+    /// maps" chooser, whose `window.open` the WebView would otherwise swallow.
+    private func openExternalUrl(_ raw: Any?) {
+        guard let urlString = raw as? String,
+              let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            return
+        }
+        DispatchQueue.main.async {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    /// Answers a web `request-logs` event by serializing the recent native log
+    /// lines and calling `window.__capital_wizard.logs({...})` in the WebView.
+    private func sendLogs(requestId: Any?) {
+        let lines = CWLog.shared.snapshot()
+        CWLog.shared.log("Returning \(lines.count) native log line(s) to web", category: "Bridge")
+        var payload: [String: Any] = ["platform": "ios", "lines": lines]
+        if let requestId = requestId { payload["requestId"] = requestId }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
+              let json = String(data: data, encoding: .utf8) else { return }
+        let js = "window.__capital_wizard && window.__capital_wizard.logs && window.__capital_wizard.logs(\(json));"
+
+        DispatchQueue.main.async { [weak self] in
+            self?.wkWebView?.evaluateJavaScript(js)
         }
     }
 }

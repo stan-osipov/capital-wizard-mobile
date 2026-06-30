@@ -3,12 +3,15 @@ package com.capitalwizard.android.webview
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.capitalwizard.android.services.AuthService
+import com.capitalwizard.android.utils.CWLog
+import com.capitalwizard.android.utils.DeviceKvStore
 import com.capitalwizard.android.utils.Event
 import com.capitalwizard.android.utils.ServiceManager
 import com.capitalwizard.android.utils.ThemePrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 
 class WebViewBridge {
@@ -71,6 +74,27 @@ class WebViewBridge {
     }
 
     /**
+     * Native → web (pre-paint seed) for the generic device-store. Writes every saved KV pair
+     * into localStorage BEFORE the page's inline pre-paint script runs (same rationale and
+     * timing as [getThemeSeedScript]), so the web `deviceStore` reads them back transparently.
+     * Empty string when nothing is saved.
+     *
+     * Keys and values are escaped via [JSONObject.quote] (valid quoted JS string literals).
+     */
+    fun getKvSeedScript(): String {
+        val context = webView?.context ?: return ""
+        val pairs = DeviceKvStore.all(context)
+        if (pairs.isEmpty()) return ""
+
+        val sets = buildString {
+            for ((key, value) in pairs) {
+                append("localStorage.setItem(${JSONObject.quote(key)}, ${JSONObject.quote(value)});")
+            }
+        }
+        return "(function(){try{$sets}catch(e){}})();"
+    }
+
+    /**
      * Native → web (post-load fallback). Pushes the saved theme/accent through the web's
      * runtime hook `window.__capital_wizard.theme({ mode, accent })`, which applies it live
      * (no reload). Used after [android.webkit.WebViewClient.onPageFinished] in case the
@@ -114,6 +138,7 @@ class WebViewBridge {
             when (type) {
                 "system" -> parseSystemMessage(json)
                 "theme" -> parseThemeMessage(json)
+                "kv" -> parseKvMessage(json)
                 "auth" -> { /* reserved */ }
             }
         } catch (e: Exception) {
@@ -141,8 +166,29 @@ class WebViewBridge {
         }
     }
 
+    /**
+     * Web → native: { type: "kv", action: "set"|"remove", key, value } from the web's
+     * `deviceStore`. Persists the verbatim pair so it can be re-seeded on the next launch.
+     * `key` is the full localStorage key; [DeviceKvStore] guards that it is within the
+     * `cw-kv:` namespace. Hops to the WebView thread for consistent context access.
+     */
+    private fun parseKvMessage(json: JSONObject) {
+        val key = json.optString("key").takeIf { it.isNotBlank() } ?: return
+        val action = json.optString("action").ifBlank { "set" }
+
+        val wv = webView ?: return
+        val context = wv.context ?: return
+        wv.post {
+            when (action) {
+                "remove" -> DeviceKvStore.remove(context, key)
+                else -> if (json.has("value")) DeviceKvStore.set(context, key, json.optString("value"))
+            }
+        }
+    }
+
     private fun parseSystemMessage(json: JSONObject) {
         val eventName = json.optString("eventName")
+        CWLog.log("Bridge system event: $eventName", category = "Bridge")
 
         when (eventName) {
             "api-ready" -> finalizeLoad()
@@ -152,7 +198,39 @@ class WebViewBridge {
                     ServiceManager.getService<AuthService>()?.signOut()
                 }
             }
+            "request-logs" -> {
+                val requestId = if (json.has("requestId")) json.optInt("requestId") else null
+                sendLogs(requestId)
+            }
         }
+    }
+
+    /**
+     * Answers a web `request-logs` event by reading this app's recent logcat
+     * output (off the main thread) and calling `window.__capital_wizard.logs({...})`
+     * in the WebView.
+     */
+    private fun sendLogs(requestId: Int?) {
+        val wv = webView ?: return
+        Thread {
+            // Structured ring buffer is the reliable source; raw logcat is best-effort
+            // extra detail (may be empty on ROMs that block self-log reads).
+            val lines = ArrayList<String>()
+            lines.addAll(CWLog.snapshot())
+            val logcat = CWLog.readRecentLogcat()
+            if (logcat.isNotEmpty()) {
+                lines.add("──── logcat (raw) ────")
+                lines.addAll(logcat)
+            }
+            CWLog.log("Returning ${lines.size} native log line(s) to web", category = "Bridge")
+            val payload = JSONObject().apply {
+                if (requestId != null) put("requestId", requestId)
+                put("platform", "android")
+                put("lines", JSONArray(lines))
+            }
+            val js = "window.__capital_wizard && window.__capital_wizard.logs && window.__capital_wizard.logs($payload);"
+            wv.post { wv.evaluateJavascript(js, null) }
+        }.start()
     }
 
     private fun finalizeLoad() {

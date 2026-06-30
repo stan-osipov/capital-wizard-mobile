@@ -227,6 +227,47 @@ struct WindowsServiceConst {
     static let tabBarIconInsets = UIEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
 }
 
+// MARK: - DeviceKVStore
+
+/// Generic device-local key→value store, mirrored from the WebView's
+/// `deviceStore` (`src/lib/deviceStore.ts`). The web owns the namespace and
+/// sends the *exact* `localStorage` key over the bridge; we persist each pair
+/// verbatim and replay `localStorage.setItem(key, value)` on the next launch
+/// (pre-paint), so a value the web stores survives a WebKit data wipe (e.g.
+/// logout) and an app relaunch — all without any native change per new key.
+///
+/// Stored as a single `[String: String]` dictionary in `UserDefaults` so the
+/// whole set can be enumerated for seeding. Device-local — never the database.
+enum DeviceKVStore {
+    /// Single `UserDefaults` bucket holding every web KV pair.
+    private static let storeKey = "cw_kv_store"
+
+    /// Only keys under this namespace are accepted — a safety guard so the
+    /// bridge can never be coaxed into persisting/seeding unrelated localStorage
+    /// keys (e.g. the Supabase auth token). Must match `PREFIX` in
+    /// `deviceStore.ts`.
+    static let webKeyPrefix = "cw-kv:"
+
+    /// Every saved pair (full `localStorage` key → value).
+    static func all() -> [String: String] {
+        (UserDefaults.standard.dictionary(forKey: storeKey) as? [String: String]) ?? [:]
+    }
+
+    static func set(key: String, value: String) {
+        guard key.hasPrefix(webKeyPrefix) else { return }
+        var dict = all()
+        dict[key] = value
+        UserDefaults.standard.set(dict, forKey: storeKey)
+    }
+
+    static func remove(key: String) {
+        guard key.hasPrefix(webKeyPrefix) else { return }
+        var dict = all()
+        dict.removeValue(forKey: key)
+        UserDefaults.standard.set(dict, forKey: storeKey)
+    }
+}
+
 // MARK: - WindowsService
 
 class WindowsService: NSObject, Service {

@@ -17,6 +17,7 @@ enum WebApiCallType: String {
     case system
     case auth
     case theme
+    case kv
 }
 
 /// Description: Base web api call.

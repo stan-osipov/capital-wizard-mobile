@@ -6,6 +6,7 @@
 //
 
 import WebKit
+import UIKit
 
 struct WebViewApplicationConst {
     static let baseUrlKey = "applicationBaseUrl"
@@ -39,6 +40,13 @@ class WebViewApplication: NSObject, Application {
     private var isActive   = false
     private var needReload = false
     private var didLogin   = false
+
+    /// True once the app has gone to the background since it was last active.
+    /// Lets us ignore transient activations (Control Center, the notification
+    /// shade) where the app never actually backgrounded.
+    private var didBackgroundSinceActive = false
+    /// When the app last entered the background — used for the staleness check.
+    private var backgroundedAt: Date?
     
     lazy var webViewCommunication: WebViewCommunication  = WebViewCommunication()
     lazy var windowsService:       WindowsService?       = ServiceManager.shared.getService()
@@ -75,9 +83,21 @@ class WebViewApplication: NSObject, Application {
     func start() {
         windowsService?.onColorSchemeChanged += onColorChangeHandler
         webViewCommunication.onAppReady += onAppReadyHandler
+
+        // Detect resume-from-background so we can recover a WebView whose
+        // web-content process was killed (or whose content was discarded) while
+        // the app sat in the background. See onAppDidBecomeActive.
+        let notificationCenter = NotificationCenter.default
+        notificationCenter.addObserver(self, selector: #selector(onAppDidEnterBackground),
+                                       name: UIApplication.didEnterBackgroundNotification, object: nil)
+        notificationCenter.addObserver(self, selector: #selector(onAppDidBecomeActive),
+                                       name: UIApplication.didBecomeActiveNotification, object: nil)
+
+        CWLog.shared.log("WebView application started (id=\(id))", category: "WebView")
     }
 
     private func onAppReady() {
+        CWLog.shared.log("Web app reported ready — revealing WebView", category: "WebView")
         DispatchQueue.main.async { [weak self] in
             self?.webViewController?.revealWebView()
         }
@@ -95,8 +115,8 @@ class WebViewApplication: NSObject, Application {
         webViewCommunication.onAppReady -= onAppReadyHandler
         
         let notificationCenter = NotificationCenter.default
-        notificationCenter.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
-        notificationCenter.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
     }
     
     func pause() {
@@ -123,10 +143,79 @@ class WebViewApplication: NSObject, Application {
     }
     
     private func reloadWebViewIfNeedded() {
+        guard needReload else { return }
+        needReload = false
+        recreateWebView()
+    }
+
+    @objc private func onAppDidEnterBackground() {
+        isActive = false
+        didBackgroundSinceActive = true
+        backgroundedAt = Date()
+        CWLog.shared.log("Entered background", category: "WebView")
+    }
+
+    @objc private func onAppDidBecomeActive() {
+        isActive = true
+
+        // Ignore transient activations (Control Center / notification shade) —
+        // only act on a real return from the background.
+        guard didBackgroundSinceActive else { return }
+        didBackgroundSinceActive = false
+
+        // A (re)load is already in progress — its preloader is on screen. Don't tear
+        // it down here, or the W animation visibly restarts. A load whose web-content
+        // process actually dies is still covered by the terminate handler.
+        if webViewController?.isShowingSplash == true {
+            CWLog.shared.log("Became active while preloader showing — leaving load in progress", category: "WebView")
+            return
+        }
+
+        let elapsed = backgroundedAt.map { Date().timeIntervalSince($0) } ?? 0
+        backgroundedAt = nil
+
+        // Nothing to recover if the WebView was never instantiated.
+        guard webViewController?.isViewLoaded == true else {
+            CWLog.shared.log("Resumed but WebView not instantiated — skipping", category: "WebView")
+            return
+        }
+
+        // Fast path: WebKit already reported the web-content process dead while we
+        // were backgrounded — reload now, no need to probe.
         if needReload {
             needReload = false
-            webViewController?.createWkWebView(withPreloader: true)
+            CWLog.shared.log("Renderer terminated while backgrounded — reloading", category: "WebView")
+            recreateWebView()
+            return
         }
+
+        // Otherwise PING the live web content and reload ONLY if it is unresponsive
+        // (dead process) or blank (rendered nothing). A healthy app is left exactly
+        // as it was — no needless reload, so the user is never bounced back through
+        // the auth screen for an app that was actually fine.
+        CWLog.shared.log(String(format: "Resumed after %.0fs — pinging web content", elapsed), category: "WebView")
+        webViewController?.pingWebContent { [weak self] healthy in
+            guard let self = self else { return }
+            if healthy {
+                CWLog.shared.log("Health ping OK — WebView left as-is", category: "WebView")
+            } else {
+                CWLog.shared.log("Health ping failed (unresponsive/blank) — reloading WebView", category: "WebView")
+                self.recreateWebView()
+            }
+        }
+    }
+
+    /// Tears down the current (possibly dead/blank) WebView and builds a fresh one
+    /// behind the splash/preloader — effectively a full restart of the web layer.
+    /// Shared by the terminate handler, the foreground staleness recovery, and the
+    /// resume path so they stay consistent.
+    private func recreateWebView() {
+        CWLog.shared.log("Recreating WebView (fresh load behind preloader)", category: "WebView")
+        didLogin = false
+        webViewController?.hideWebView()
+        webViewCommunication.clearData()
+        webViewController?.contentController = webViewCommunication.contentController
+        webViewController?.createWkWebView(withPreloader: true)
     }
  
     private func onColorSchemeChanged(_ scheme: ColorScheme) {
@@ -157,9 +246,11 @@ extension WebViewApplication: UrlFactory {
         let authService: AuthService? = ServiceManager.shared.getService()
         guard let session = try? await authService?.client.session else { return }
         await MainActor.run {
-            // Seed the theme/accent into localStorage BEFORE the page's
-            // pre-paint inline script runs (atDocumentStart), then inject auth.
+            // Seed the theme/accent + generic device-store values into
+            // localStorage BEFORE the page's pre-paint inline script runs
+            // (atDocumentStart), then inject auth.
             webViewCommunication.addThemeSeedScript()
+            webViewCommunication.addKvSeedScript()
             webViewCommunication.addAuthScript(accessToken: session.accessToken, refreshToken: session.refreshToken)
         }
     }
@@ -172,7 +263,7 @@ extension WebViewApplication: UrlFactory {
             throw WebViewError(message: "Couldn't create url from \(stringUrl)")
         }
         
-        print("[WebView] Loading: \(url)")
+        CWLog.shared.log("Loading URL: \(url.absoluteString)", category: "WebView")
         return url
     }
     
@@ -196,7 +287,7 @@ extension WebViewApplication: UrlFactory {
 
 extension WebViewApplication: WebViewControllerDelegate {
     func onError(_ error: any Error) {
-        print(error)
+        CWLog.shared.log("Error: \(error)", category: "WebView")
     }
     
     func willStartLoad(wkWebView: WKWebView) {
@@ -204,15 +295,16 @@ extension WebViewApplication: WebViewControllerDelegate {
     }
     
     func onWebViewTerminated() {
-        didLogin = false
-        webViewController?.hideWebView()
-        webViewCommunication.clearData()
-        webViewController?.contentController = webViewCommunication.contentController
-        if isActive {
-            onError(WebViewError(message: "Web view for \(id) did terminate"))
-            webViewController?.createWkWebView(withPreloader: true)
+        // The WebView's web-content process was killed (commonly under memory
+        // pressure while backgrounded). Rebuild immediately if we're in the
+        // foreground; otherwise flag it so onAppDidBecomeActive rebuilds it on
+        // the next foreground — never reload while still backgrounded, or the
+        // load stalls and the splash times out onto a blank WebView.
+        CWLog.shared.log("Web content process terminated (isActive=\(isActive))", category: "WebView")
+        if isActive, webViewController?.isViewLoaded == true {
+            recreateWebView()
         } else {
-            print("Web view for \(id) did terminate")
+            CWLog.shared.log("Terminated while backgrounded — deferring reload to next foreground", category: "WebView")
             needReload = true
         }
     }

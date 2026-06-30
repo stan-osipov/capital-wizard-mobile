@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -16,11 +17,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.capitalwizard.android.R
 import com.capitalwizard.android.services.AuthService
 import com.capitalwizard.android.ui.auth.LoginActivity
+import com.capitalwizard.android.utils.CWLog
 import com.capitalwizard.android.utils.EventCallback
 import com.capitalwizard.android.utils.ServiceManager
 import com.capitalwizard.android.webview.WebViewBridge
@@ -29,11 +31,21 @@ import kotlinx.coroutines.launch
 class WebViewActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var splashView: View
     private lateinit var bridge: WebViewBridge
 
     private var authService: AuthService? = null
+
+    // --- Resume-from-background WebView recovery (mirrors the iOS shell) ---
+    /** Elapsed-realtime millis when the app last entered the background. */
+    private var backgroundedAt: Long = 0L
+    /** True once a real background (onStop) happened — lets onResume ignore
+     *  transient pauses (permission dialogs, etc.) where onStop never fired. */
+    private var didBackground = false
+    /** Set when the renderer died while backgrounded; consumed on next foreground. */
+    private var pendingReload = false
+    /** Guards against calling recreate() more than once on this Activity instance. */
+    private var recreateScheduled = false
 
     private val onLogoutCallback = EventCallback<Unit> { navigateToLogin() }
     private val onAppReadyCallback = EventCallback<Unit> { runOnUiThread { revealWebView() } }
@@ -42,6 +54,7 @@ class WebViewActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_webview)
+        CWLog.log("WebViewActivity created", category = "WebView")
 
         // Light status bar icons (white) for dark background
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
@@ -60,15 +73,10 @@ class WebViewActivity : AppCompatActivity() {
         bridge.onAppReady += onAppReadyCallback
 
         splashView = findViewById(R.id.splash_view)
-        swipeRefresh = findViewById(R.id.swipe_refresh)
         webView = findViewById(R.id.web_view)
 
         setupWebView()
         loadApp()
-
-        swipeRefresh.setOnRefreshListener {
-            webView.reload()
-        }
 
         // Timeout fallback for splash
         splashView.postDelayed({ revealWebView() }, 15_000)
@@ -92,6 +100,10 @@ class WebViewActivity : AppCompatActivity() {
             displayZoomControls = false
         }
 
+        // The web app is a fixed app shell with its own scroll containers — kill
+        // the document-level overscroll glow (the WebView itself never scrolls).
+        webView.overScrollMode = View.OVER_SCROLL_NEVER
+
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
         webView.addJavascriptInterface(bridge, WebViewBridge.JS_INTERFACE_NAME)
@@ -108,11 +120,13 @@ class WebViewActivity : AppCompatActivity() {
                 // pre-paint script reads it (avoids a theme flash).
                 val seed = bridge.getThemeSeedScript()
                 if (seed.isNotEmpty()) view?.evaluateJavascript(seed, null)
+                // Seed generic device-store values the same way.
+                val kvSeed = bridge.getKvSeedScript()
+                if (kvSeed.isNotEmpty()) view?.evaluateJavascript(kvSeed, null)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                swipeRefresh.isRefreshing = false
 
                 // Inject native app identifier script
                 view?.evaluateJavascript(bridge.getNativeAppScript(), null)
@@ -141,12 +155,7 @@ class WebViewActivity : AppCompatActivity() {
             override fun onRenderProcessGone(
                 view: WebView?,
                 detail: android.webkit.RenderProcessGoneDetail?
-            ): Boolean {
-                // Recreate the WebView if the renderer crashes
-                bridge.clearState()
-                recreate()
-                return true
-            }
+            ): Boolean = handleRenderProcessGone(detail)
         }
 
         webView.webChromeClient = WebChromeClient()
@@ -194,11 +203,14 @@ class WebViewActivity : AppCompatActivity() {
                             // inline pre-paint script reads it (avoids a theme flash).
                             val seed = bridge.getThemeSeedScript()
                             if (seed.isNotEmpty()) view?.evaluateJavascript(seed, null)
+                            // Seed generic device-store values the same way.
+                            val kvSeed = bridge.getKvSeedScript()
+                            if (kvSeed.isNotEmpty()) view?.evaluateJavascript(kvSeed, null)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            swipeRefresh.isRefreshing = false
+                            CWLog.log("Page finished loading", category = "WebView")
 
                             // Inject the iOS-compatible bridge
                             val bridgeScript = """
@@ -242,11 +254,7 @@ class WebViewActivity : AppCompatActivity() {
                         override fun onRenderProcessGone(
                             view: WebView?,
                             detail: android.webkit.RenderProcessGoneDetail?
-                        ): Boolean {
-                            bridge.clearState()
-                            recreate()
-                            return true
-                        }
+                        ): Boolean = handleRenderProcessGone(detail)
                     }
                 }
 
@@ -272,6 +280,7 @@ class WebViewActivity : AppCompatActivity() {
                 webView.evaluateJavascript(authScript, null)
             }
 
+            CWLog.log("Loading URL: ${WebViewBridge.BASE_URL} (auth=${accessToken != null})", category = "WebView")
             webView.loadUrl(WebViewBridge.BASE_URL)
         }
     }
@@ -301,6 +310,7 @@ class WebViewActivity : AppCompatActivity() {
     }
 
     private fun navigateToLogin() {
+        CWLog.log("Logout — clearing WebView data and navigating to login", category = "Auth")
         // Clear WebView data
         CookieManager.getInstance().removeAllCookies(null)
         webView.clearCache(true)
@@ -318,6 +328,103 @@ class WebViewActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             super.onBackPressed()
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        didBackground = true
+        backgroundedAt = SystemClock.elapsedRealtime()
+        CWLog.log("Entered background", category = "WebView")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Only react to a real return from the background (onStop fired) — ignore
+        // transient pauses (e.g. permission dialogs) where onStop never happened.
+        if (!didBackground) return
+        didBackground = false
+
+        // A (re)load is already in progress — its preloader is on screen. Don't
+        // restart it here or the W animation visibly jumps back to the start. A
+        // renderer that actually dies is still covered by handleRenderProcessGone.
+        if (splashView.visibility == View.VISIBLE) {
+            CWLog.log("Resumed while preloader showing — leaving load in progress", category = "WebView")
+            return
+        }
+
+        val elapsed = SystemClock.elapsedRealtime() - backgroundedAt
+
+        // Fast path: the renderer was reported dead while backgrounded — reload now.
+        if (pendingReload) {
+            pendingReload = false
+            CWLog.log("Renderer terminated while backgrounded — reloading", category = "WebView")
+            recreateOnce()
+            return
+        }
+
+        // Otherwise PING the live web content and reload ONLY if it is unresponsive
+        // (dead renderer) or blank (rendered nothing). A healthy app is left exactly
+        // as it was — no needless reload, so the user is never bounced back through
+        // the auth screen for an app that was actually fine.
+        CWLog.log("Resumed after ${elapsed / 1000}s — pinging web content", category = "WebView")
+        pingWebContent { healthy ->
+            if (healthy) {
+                CWLog.log("Health ping OK — WebView left as-is", category = "WebView")
+            } else {
+                CWLog.log("Health ping failed (unresponsive/blank) — reloading WebView", category = "WebView")
+                recreateOnce()
+            }
+        }
+    }
+
+    /**
+     * Probe whether the live web content is responsive and has actually rendered.
+     * Calls back with `false` if the renderer is dead (evaluateJavascript yields
+     * `"null"`) or the app rendered nothing into `#root` (a blank screen). Used on
+     * foreground to decide whether a reload is genuinely needed, so a healthy app
+     * is never reloaded. The callback runs on the UI thread.
+     */
+    private fun pingWebContent(callback: (Boolean) -> Unit) {
+        val probe = "(function(){try{var r=document.getElementById('root');" +
+            "return !!(window.__capital_wizard && r && r.childElementCount > 0);}" +
+            "catch(e){return false;}})()"
+        webView.evaluateJavascript(probe) { value ->
+            // evaluateJavascript returns the JSON-encoded result: "true"/"false"/"null".
+            callback(value == "true")
+        }
+    }
+
+    /**
+     * Handles [WebViewClient.onRenderProcessGone] — the renderer process was killed
+     * (commonly under memory pressure while backgrounded), which leaves a blank
+     * WebView. Rebuilds the Activity (fresh WebView + splash) immediately when
+     * foreground; otherwise defers to [onResume] so we never reload while
+     * backgrounded — that would stall the load and time the splash out onto a
+     * blank view. Returning true tells the system we handled it (don't kill us).
+     */
+    private fun handleRenderProcessGone(detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+        val crashed = detail?.didCrash() == true
+        CWLog.log("Render process gone (crashed=$crashed)", category = "WebView")
+        bridge.clearState()
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            recreateOnce()
+        } else {
+            CWLog.log("Renderer gone while backgrounded — deferring reload to next foreground", category = "WebView")
+            pendingReload = true
+        }
+        return true
+    }
+
+    /**
+     * Calls [recreate] at most once per Activity instance, so two recovery triggers
+     * firing close together (e.g. a stale resume and an onRenderProcessGone
+     * callback) can't tear down and restart the preloader twice.
+     */
+    private fun recreateOnce() {
+        if (recreateScheduled) return
+        recreateScheduled = true
+        CWLog.log("Recreating activity (fresh WebView + preloader)", category = "WebView")
+        recreate()
     }
 
     override fun onDestroy() {

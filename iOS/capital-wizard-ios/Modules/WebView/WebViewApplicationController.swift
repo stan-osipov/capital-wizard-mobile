@@ -15,12 +15,6 @@ protocol WebViewControllerDelegate: AnyObject {
 
 class WebViewApplicationController: ApplicationViewController {
 
-    enum RefreshingState {
-        case start
-        case onReleaseFinger
-        case cancel
-    }
-
     private var wkWebView: WKWebView?
 
     var onLoadedEvent: Event<Void> = Event()
@@ -34,13 +28,17 @@ class WebViewApplicationController: ApplicationViewController {
     weak var delegate:     WebViewControllerDelegate?
 
     private var splashView:     UIView?
-    private var refreshControl: UIRefreshControl?
     private var readyTimeoutWork: DispatchWorkItem?
 
     private lazy var windowsService: WindowsService? = ServiceManager.shared.getService()
     private var isDarkMode: Bool {
         windowsService?.colorScheme.isDarkMode ?? false
     }
+
+    /// True while the splash/preloader is on screen — i.e. a (re)load is in progress
+    /// and has not been revealed yet. Recovery checks this so it never tears down a
+    /// preloader that is already running (which would restart the W animation).
+    var isShowingSplash: Bool { splashView != nil }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -51,6 +49,7 @@ class WebViewApplicationController: ApplicationViewController {
         guard let contentController = contentController else {
             return
         }
+        CWLog.shared.log("Creating WKWebView (preloader=\(hasPreloader))", category: "WebView")
         SplashAnimationView.postStatus("Creating browser…")
 
         let config = WKWebViewConfiguration()
@@ -72,22 +71,17 @@ class WebViewApplicationController: ApplicationViewController {
 
         let scheme = windowsService?.colorScheme ?? .light
 
-        wkWebView.scrollView.bounces      = true
-        wkWebView.scrollView.scrollsToTop = false
-
-        let refreshControl  = UIRefreshControl()
-        self.refreshControl = refreshControl
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .foregroundColor: UIColor.gray,
-            .font: UIFont.systemFont(ofSize: 14)
-        ]
-        let attributedTitle = NSAttributedString(string: "Pull to Refresh", attributes: attributes)
-        refreshControl.attributedTitle = attributedTitle
-
-        refreshControl.addTarget(self, action: #selector(reloadWebView(_:)), for: .valueChanged)
-
-        wkWebView.scrollView.refreshControl = refreshControl
+        // The web app is a fixed app shell — all scrolling happens inside its own
+        // containers. Lock the WebView's document scroll view completely: no user
+        // scrolling, no rubber-band bounce, no pull-to-refresh, no zoom. The web
+        // app offers a "Reload app" action in its side menu instead.
+        wkWebView.scrollView.isScrollEnabled          = false
+        wkWebView.scrollView.bounces                  = false
+        wkWebView.scrollView.alwaysBounceVertical     = false
+        wkWebView.scrollView.alwaysBounceHorizontal   = false
+        wkWebView.scrollView.scrollsToTop             = false
+        wkWebView.scrollView.minimumZoomScale         = 1.0
+        wkWebView.scrollView.maximumZoomScale         = 1.0
 
         setupView(for: wkWebView, colorScheme: scheme)
 
@@ -120,6 +114,7 @@ class WebViewApplicationController: ApplicationViewController {
 
         // Timeout fallback
         let timeout = DispatchWorkItem { [weak self] in
+            CWLog.shared.log("Preloader timeout (15s) reached — revealing WebView anyway", category: "WebView")
             SplashAnimationView.postStatus("Timeout — revealing app")
             self?.revealWebView()
         }
@@ -260,11 +255,6 @@ class WebViewApplicationController: ApplicationViewController {
         return WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
     }
 
-    @objc private func reloadWebView(_ sender: UIRefreshControl) {
-        webViewDidLoaded = false
-        wkWebView?.reloadFromOrigin()
-    }
-
     func updateColorScheme(_ scheme: ColorScheme) {
         let color  = AppColors(scheme: scheme)
         view.backgroundColor = color.keyboardBackground
@@ -279,14 +269,13 @@ class WebViewApplicationController: ApplicationViewController {
         readyTimeoutWork = nil
         splashView?.removeFromSuperview()
         splashView = nil
-        refreshControl?.removeTarget(self, action: #selector(reloadWebView(_:)), for: .valueChanged)
-        refreshControl = nil
         wkWebView?.stopLoading()
         wkWebView?.closeAllMediaPresentations()
         wkWebView?.navigationDelegate = nil
         wkWebView?.uiDelegate = nil
         wkWebView?.configuration.userContentController.removeAllUserScripts()
         wkWebView?.configuration.userContentController.removeAllScriptMessageHandlers()
+        wkWebView?.removeFromSuperview()
         wkWebView = nil
     }
 
@@ -306,6 +295,29 @@ class WebViewApplicationController: ApplicationViewController {
 
     func hardRealod() {
         wkWebView?.reloadFromOrigin()
+    }
+
+    /// Probe whether the live web content is responsive and has actually rendered.
+    /// Calls back with `false` if the web-content process is dead (the JS eval
+    /// errors out) or the app rendered nothing into `#root` (a blank screen). Used
+    /// on foreground to decide whether a reload is genuinely needed, so a healthy
+    /// app is never reloaded.
+    func pingWebContent(_ completion: @escaping (Bool) -> Void) {
+        guard let wkWebView = wkWebView else {
+            completion(false)
+            return
+        }
+        let probe = "(function(){try{var r=document.getElementById('root');"
+            + "return !!(window.__capital_wizard && r && r.childElementCount > 0);}"
+            + "catch(e){return false;}})()"
+        wkWebView.evaluateJavaScript(probe) { result, error in
+            if let error = error {
+                CWLog.shared.log("Health ping error: \(error.localizedDescription)", category: "WebView")
+                completion(false)
+                return
+            }
+            completion((result as? Bool) ?? false)
+        }
     }
 }
 
@@ -332,15 +344,9 @@ extension WebViewApplicationController: WKUIDelegate {
 extension WebViewApplicationController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         webViewDidLoaded = true
+        CWLog.shared.log("WebView navigation finished", category: "WebView")
         SplashAnimationView.postStatus("Waiting for app ready…")
         onLoadedEvent.invoke(())
-        guard let scrollView = wkWebView?.scrollView else {
-            return
-        }
-        guard !scrollView.isDragging && !scrollView.isTracking else {
-            return
-        }
-        refreshControl?.endRefreshing()
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
@@ -363,10 +369,14 @@ extension WebViewApplicationController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        refreshControl?.endRefreshing()
+        CWLog.shared.log("WebView provisional navigation failed: \(error.localizedDescription)", category: "WebView")
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        // Ignore a termination reported for a WebView we have already replaced
+        // (e.g. the old one dying just as a recovery reload starts) — otherwise the
+        // in-flight preloader gets torn down and the W animation restarts.
+        guard webView == wkWebView else { return }
         delegate?.onWebViewTerminated()
     }
 }

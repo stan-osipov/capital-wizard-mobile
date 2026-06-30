@@ -13,6 +13,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var appManager: AppManager?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Start capturing stdout/stderr early so the bug reporter can attach the
+        // native log (see CWLog + WebViewCommunication `request-logs`).
+        CWLog.shared.start()
+        let device = UIDevice.current
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        CWLog.shared.log("App launch — v\(appVersion) (\(build)), iOS \(device.systemVersion), \(device.model)", category: "App")
         appManager = AppManager()
         return true
     }

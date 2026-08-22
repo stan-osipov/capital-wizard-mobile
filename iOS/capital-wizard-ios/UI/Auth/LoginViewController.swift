@@ -48,7 +48,9 @@ class LoginViewController: UIViewController {
     private var colors: AppColors { AppColors.colors(for: effectiveStyle) }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        .portrait
+        // iPhone stays portrait; iPad rotates freely (the card is centered
+        // and width-capped, so it lays out fine in any orientation).
+        UIDevice.current.userInterfaceIdiom == .pad ? .all : .portrait
     }
 
     override func viewDidLoad() {

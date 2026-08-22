@@ -77,4 +77,8 @@
          own language regardless of UI locale, so not translated) -->
     <string name="locale_menu_en" translatable="false">🇬🇧 English</string>
     <string name="locale_menu_uk" translatable="false">🇺🇦 Українська</string>
+
+    <!-- Notification channel shown in the system settings list -->
+    <string name="push_channel_name">General</string>
+    <string name="push_channel_description">Reminders and updates from Capital Wizard</string>
 </resources>

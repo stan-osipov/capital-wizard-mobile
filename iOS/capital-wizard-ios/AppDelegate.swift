@@ -24,6 +24,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    // MARK: - Remote notifications
+    //
+    // APNs only ever calls the app delegate, so both outcomes are handed
+    // straight to PushService, which owns the registration and answers the web
+    // app's request.
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let pushService: PushService? = ServiceManager.shared.getService()
+        pushService?.didRegister(deviceToken: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        let pushService: PushService? = ServiceManager.shared.getService()
+        pushService?.didFailToRegister(error: error)
+    }
+
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         if UIDevice.current.userInterfaceIdiom == .pad {
             return .all

@@ -21,6 +21,7 @@ app/debug/
 *.jks
 *.keystore
 keystore.properties
+secrets/
 
 # ProGuard/R8
 mapping.txt

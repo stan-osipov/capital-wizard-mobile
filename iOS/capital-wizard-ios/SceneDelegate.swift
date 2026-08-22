@@ -20,18 +20,51 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let windowsService = WindowsService(window: window)
         ServiceManager.shared.register(windowsService)
 
+        // Stash a launch-time link BEFORE postInit(), which kicks off the auth
+        // check that ends up building the WebView. Getting there first is what
+        // lets the very first page load land on the linked route instead of the
+        // app root — no visible redirect.
+        captureLaunchLinks(connectionOptions)
+
         let appDelegate = UIApplication.shared.delegate as? AppDelegate
         appDelegate?.appManager?.postInit()
-        
+
         self.window = window
     }
 
-    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        guard let authService: AuthService = ServiceManager.shared.getService() else {
-            return
+    /// Picks up a link that launched the app from cold: a universal link arrives
+    /// as a browsing-web `NSUserActivity`, the custom scheme as a URL context.
+    private func captureLaunchLinks(_ connectionOptions: UIScene.ConnectionOptions) {
+        let deepLinkService: DeepLinkService? = ServiceManager.shared.getService()
+
+        for activity in connectionOptions.userActivities
+        where activity.activityType == NSUserActivityTypeBrowsingWeb {
+            if deepLinkService?.handle(url: activity.webpageURL) == true { return }
         }
 
-        authService.onOpenUrl(url: URLContexts.first?.url)
+        for context in connectionOptions.urlContexts {
+            if deepLinkService?.handle(url: context.url) == true { return }
+        }
+    }
+
+    /// Universal link tapped while the app is already running.
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb else { return }
+        let deepLinkService: DeepLinkService? = ServiceManager.shared.getService()
+        deepLinkService?.handle(url: userActivity.webpageURL)
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+
+        // Routing links and the OAuth callback share the custom scheme, split by
+        // host (`open` vs `auth`). Offer it to the router first; anything it
+        // declines is the auth leg and still reaches AuthService untouched.
+        let deepLinkService: DeepLinkService? = ServiceManager.shared.getService()
+        if deepLinkService?.handle(url: url) == true { return }
+
+        let authService: AuthService? = ServiceManager.shared.getService()
+        authService?.onOpenUrl(url: url)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

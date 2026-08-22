@@ -12,6 +12,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -19,9 +20,15 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.capitalwizard.android.R
 import com.capitalwizard.android.services.AuthService
+import com.capitalwizard.android.services.DeepLinkService
+import com.capitalwizard.android.services.PushRegistration
+import com.capitalwizard.android.services.PushService
 import com.capitalwizard.android.ui.auth.LoginActivity
+import com.capitalwizard.android.utils.AppEndpoint
 import com.capitalwizard.android.utils.CWLog
 import com.capitalwizard.android.utils.EventCallback
 import com.capitalwizard.android.utils.ServiceManager
@@ -30,11 +37,34 @@ import kotlinx.coroutines.launch
 
 class WebViewActivity : AppCompatActivity() {
 
+    companion object {
+        /**
+         * The web app posts to `window.webkit.messageHandlers.iosCW` (iOS) or
+         * `window.androidCW` (Android). We stand the iOS-shaped path up too, so
+         * anything written against it works here without a platform branch.
+         */
+        private val IOS_BRIDGE_SHIM = """
+            (function () {
+                if (!window.webkit) { window.webkit = {}; }
+                if (!window.webkit.messageHandlers) { window.webkit.messageHandlers = {}; }
+                if (!window.webkit.messageHandlers.iosCW) {
+                    window.webkit.messageHandlers.iosCW = {
+                        postMessage: function (msg) {
+                            window.${WebViewBridge.JS_INTERFACE_NAME}.postMessage(JSON.stringify(msg));
+                        }
+                    };
+                }
+            })();
+        """.trimIndent()
+    }
+
     private lateinit var webView: WebView
     private lateinit var splashView: View
     private lateinit var bridge: WebViewBridge
 
     private var authService: AuthService? = null
+    private var deepLinkService: DeepLinkService? = null
+    private var pushService: PushService? = null
 
     // --- Resume-from-background WebView recovery (mirrors the iOS shell) ---
     /** Elapsed-realtime millis when the app last entered the background. */
@@ -47,8 +77,61 @@ class WebViewActivity : AppCompatActivity() {
     /** Guards against calling recreate() more than once on this Activity instance. */
     private var recreateScheduled = false
 
+    /** True once the document-start scripts are registered. When false this
+     *  WebView is too old for them and the client callbacks inject instead. */
+    private var documentStartInstalled = false
+
     private val onLogoutCallback = EventCallback<Unit> { navigateToLogin() }
-    private val onAppReadyCallback = EventCallback<Unit> { runOnUiThread { revealWebView() } }
+    private val onAppReadyCallback = EventCallback<Unit> {
+        runOnUiThread {
+            revealWebView()
+            // The web app is signed in and rendering, so taps stashed through a
+            // cold launch can finally be reported.
+            flushOpenReports()
+        }
+    }
+    private val onDeepLinkCallback = EventCallback<String> { runOnUiThread { routePendingDeepLink() } }
+
+    /** An admin switched the endpoint from inside the web app. The new address is
+     *  already persisted; restarting the Activity is what moves us onto it — a
+     *  plain reload would re-fetch the OLD url and would also keep the injected
+     *  script that told the page which site it was on. */
+    private val onEndpointChangedCallback = EventCallback<AppEndpoint> { endpoint ->
+        runOnUiThread {
+            CWLog.log("Endpoint changed to ${endpoint.channel} — restarting the web layer", category = "WebView")
+            recreateOnce()
+        }
+    }
+
+    /** FCM answered the web app's token request — hand it straight over. */
+    private val onPushRegistrationCallback = EventCallback<PushRegistration?> { registration ->
+        runOnUiThread { bridge.pushRegistration(registration, pushService?.lastFailureReason) }
+    }
+
+    /** A warm tap recorded its click-tracking id — forward it if the bridge is
+     *  live; otherwise it stays stashed for the app-ready flush above. */
+    private val onOpenRecordedCallback = EventCallback<Unit> {
+        runOnUiThread { if (bridge.isReady) flushOpenReports() }
+    }
+
+    /** Hands the stashed tap ids to the web app. Consuming clears the stash, so
+     *  a failed push puts nothing back — dropping a best-effort statistic beats
+     *  machinery to retry it. */
+    private fun flushOpenReports() {
+        val ids = pushService?.consumePendingOpenReports() ?: return
+        if (ids.isNotEmpty()) bridge.pushOpened(ids)
+    }
+
+    /** Back walks the WebView's history while it has any; disabled, the system
+     *  takes over (backgrounding the task, with the predictive animation on 16+).
+     *  Targeting SDK 36, Android 16 no longer calls a legacy onBackPressed()
+     *  override, so the enabled flag — kept fresh by doUpdateVisitedHistory on
+     *  both WebViewClients — is what declares whether we consume Back. */
+    private val webBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            webView.goBack()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,11 +152,19 @@ class WebViewActivity : AppCompatActivity() {
         authService = ServiceManager.getService<AuthService>()
         authService?.onLogout?.subscribe(onLogoutCallback)
 
+        deepLinkService = ServiceManager.getService<DeepLinkService>()
+        pushService = ServiceManager.getService<PushService>()
+        pushService?.onRegistration?.subscribe(onPushRegistrationCallback)
+        pushService?.onOpenRecorded?.subscribe(onOpenRecordedCallback)
+
         bridge = WebViewBridge()
         bridge.onAppReady += onAppReadyCallback
+        bridge.onEndpointChanged += onEndpointChangedCallback
 
         splashView = findViewById(R.id.splash_view)
         webView = findViewById(R.id.web_view)
+
+        onBackPressedDispatcher.addCallback(this, webBackCallback)
 
         setupWebView()
         loadApp()
@@ -116,22 +207,34 @@ class WebViewActivity : AppCompatActivity() {
                 favicon: android.graphics.Bitmap?
             ) {
                 super.onPageStarted(view, url, favicon)
-                // Seed saved theme/accent into localStorage BEFORE the page's inline
-                // pre-paint script reads it (avoids a theme flash).
+                // Fallback for WebView < 83 only — see installDocumentStartScripts.
+                // This races the page's own scripts, which is why it is the fallback:
+                // the pre-paint script may read the theme before the seed lands.
+                if (documentStartInstalled) return
+                view?.evaluateJavascript(bridge.getNativeAppScript(), null)
                 val seed = bridge.getThemeSeedScript()
                 if (seed.isNotEmpty()) view?.evaluateJavascript(seed, null)
-                // Seed generic device-store values the same way.
                 val kvSeed = bridge.getKvSeedScript()
                 if (kvSeed.isNotEmpty()) view?.evaluateJavascript(kvSeed, null)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                CWLog.log("Page finished loading", category = "WebView")
 
-                // Inject native app identifier script
-                view?.evaluateJavascript(bridge.getNativeAppScript(), null)
+                // Belt and braces on the fallback path: the web app reads
+                // `__capital_wizard_native` at module scope, and losing that race
+                // costs it `app-ready` — which strands the splash on its timeout.
+                // Idempotent, so re-running it here is free.
+                if (!documentStartInstalled) {
+                    view?.evaluateJavascript(bridge.getNativeAppScript(), null)
+                }
 
-                // Fallback theme push in case the pre-paint seed landed late.
+                view?.evaluateJavascript(IOS_BRIDGE_SHIM, null)
+                view?.evaluateJavascript(bridge.getZoomDisableScript(), null)
+
+                // Fallback theme push in case the pre-paint seed landed late:
+                // applies the saved theme/accent live via __capital_wizard.theme.
                 val push = bridge.getThemePushScript()
                 if (push.isNotEmpty()) view?.evaluateJavascript(push, null)
             }
@@ -141,7 +244,7 @@ class WebViewActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url ?: return false
-                val baseHost = Uri.parse(WebViewBridge.BASE_URL).host
+                val baseHost = Uri.parse(WebViewBridge.baseUrl(this@WebViewActivity)).host
 
                 // Open external links in the system browser
                 return if (url.host != baseHost) {
@@ -152,6 +255,11 @@ class WebViewActivity : AppCompatActivity() {
                 }
             }
 
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                webBackCallback.isEnabled = view?.canGoBack() == true
+            }
+
             override fun onRenderProcessGone(
                 view: WebView?,
                 detail: android.webkit.RenderProcessGoneDetail?
@@ -159,130 +267,117 @@ class WebViewActivity : AppCompatActivity() {
         }
 
         webView.webChromeClient = WebChromeClient()
+    }
 
-        // Inject the JS bridge setup script that routes messages to our interface
-        val setupScript = """
-            (function() {
-                ${bridge.getNativeAppScript()}
+    /**
+     * Registers everything the page must see BEFORE its own scripts run.
+     *
+     * `evaluateJavascript` cannot do this. It acts on the document loaded RIGHT
+     * NOW, and the `loadUrl` that follows replaces that document — taking the
+     * injection with it. `addDocumentStartJavaScript` registers against the
+     * WebView instead, so each script runs at the start of every matching load.
+     * This is the Android expression of the iOS shell's `WKUserScript` list.
+     *
+     * Carrying the SESSION here is what matters most: the web app wakes its
+     * services exactly once, and a session that arrives after that leaves it
+     * signed-out for the life of the document — a shell with no space and no
+     * active app, which is the blank screen the first Google sign-in produced.
+     *
+     * Unsupported on WebView < 83 (`DOCUMENT_START_SCRIPT`). There the page
+     * still gets these values from the client callbacks above, and the session
+     * still lands through the `api-ready` handshake — the web app then reloads
+     * once into it, which is slower but correct.
+     */
+    private fun installDocumentStartScripts(accessToken: String?, refreshToken: String?) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            CWLog.log(
+                "Document-start scripts unsupported — using page-callback fallback",
+                category = "WebView",
+            )
+            return
+        }
 
-                // Create bridge: web app posts to window.webkit.messageHandlers.iosCW (iOS)
-                // or window.androidCW (Android). We set up the iOS-compatible path too.
-                if (!window.webkit) { window.webkit = {}; }
-                if (!window.webkit.messageHandlers) { window.webkit.messageHandlers = {}; }
-                if (!window.webkit.messageHandlers.iosCW) {
-                    window.webkit.messageHandlers.iosCW = {
-                        postMessage: function(msg) {
-                            window.androidCW.postMessage(JSON.stringify(msg));
-                        }
-                    };
+        // Scoped to our own origin: these scripts carry this device's session.
+        val rules = setOf(WebViewBridge.originRule(this))
+
+        val scripts = buildList {
+            add(bridge.getNativeAppScript())
+            add(IOS_BRIDGE_SHIM)
+            bridge.getThemeSeedScript().takeIf { it.isNotEmpty() }?.let { add(it) }
+            bridge.getKvSeedScript().takeIf { it.isNotEmpty() }?.let { add(it) }
+            if (accessToken != null && refreshToken != null) {
+                add(bridge.getAuthSeedScript(accessToken, refreshToken))
+            }
+        }
+
+        // An origin rule the WebView rejects throws rather than returning null,
+        // and failing to inject must not take the whole load down with it — the
+        // fallback path still gets the user to a working app.
+        val installed = scripts.all { script ->
+            runCatching { WebViewCompat.addDocumentStartJavaScript(webView, script, rules) }
+                .onFailure {
+                    CWLog.log("Document-start script rejected: ${it.message}", category = "WebView")
                 }
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(setupScript, null)
+                .isSuccess
+        }
+
+        documentStartInstalled = installed
+        CWLog.log(
+            "Document-start scripts installed=$installed (auth=${accessToken != null})",
+            category = "WebView",
+        )
     }
 
     private fun loadApp() {
-        // Inject auth tokens before loading
         lifecycleScope.launch {
             val accessToken = authService?.getAccessToken()
             val refreshToken = authService?.getRefreshToken()
 
-            if (accessToken != null && refreshToken != null) {
-                // Add auth injection script that runs at document end
-                bridge.webView?.let { wv ->
-                    wv.webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(
-                            view: WebView?,
-                            url: String?,
-                            favicon: android.graphics.Bitmap?
-                        ) {
-                            super.onPageStarted(view, url, favicon)
-                            // Inject native platform identifier early
-                            view?.evaluateJavascript(bridge.getNativeAppScript(), null)
-                            // Seed saved theme/accent into localStorage BEFORE the page's
-                            // inline pre-paint script reads it (avoids a theme flash).
-                            val seed = bridge.getThemeSeedScript()
-                            if (seed.isNotEmpty()) view?.evaluateJavascript(seed, null)
-                            // Seed generic device-store values the same way.
-                            val kvSeed = bridge.getKvSeedScript()
-                            if (kvSeed.isNotEmpty()) view?.evaluateJavascript(kvSeed, null)
-                        }
+            // Registered against the WebView, so — unlike an evaluateJavascript
+            // call — these survive the loadUrl below and run before the page's
+            // own scripts on every load.
+            installDocumentStartScripts(accessToken, refreshToken)
 
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            super.onPageFinished(view, url)
-                            CWLog.log("Page finished loading", category = "WebView")
+            val startUrl = buildStartUrl()
+            CWLog.log("Loading URL: $startUrl (auth=${accessToken != null})", category = "WebView")
+            webView.loadUrl(startUrl)
 
-                            // Inject the iOS-compatible bridge
-                            val bridgeScript = """
-                                (function() {
-                                    if (!window.webkit) { window.webkit = {}; }
-                                    if (!window.webkit.messageHandlers) { window.webkit.messageHandlers = {}; }
-                                    if (!window.webkit.messageHandlers.iosCW) {
-                                        window.webkit.messageHandlers.iosCW = {
-                                            postMessage: function(msg) {
-                                                window.androidCW.postMessage(JSON.stringify(msg));
-                                            }
-                                        };
-                                    }
-                                })();
-                            """.trimIndent()
-                            view?.evaluateJavascript(bridgeScript, null)
-
-                            // Inject zoom disable
-                            view?.evaluateJavascript(bridge.getZoomDisableScript(), null)
-
-                            // Fallback theme push in case the pre-paint seed landed late:
-                            // applies the saved theme/accent live via __capital_wizard.theme.
-                            val push = bridge.getThemePushScript()
-                            if (push.isNotEmpty()) view?.evaluateJavascript(push, null)
-                        }
-
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView?,
-                            request: WebResourceRequest?
-                        ): Boolean {
-                            val url = request?.url ?: return false
-                            val baseHost = Uri.parse(WebViewBridge.BASE_URL).host
-                            return if (url.host != baseHost) {
-                                startActivity(Intent(Intent.ACTION_VIEW, url))
-                                true
-                            } else {
-                                false
-                            }
-                        }
-
-                        override fun onRenderProcessGone(
-                            view: WebView?,
-                            detail: android.webkit.RenderProcessGoneDetail?
-                        ): Boolean = handleRenderProcessGone(detail)
-                    }
-                }
-
-                // Pre-inject auth tokens as a script that will run on page load
-                val authScript = """
-                    (function() {
-                        var _origAuth = null;
-                        Object.defineProperty(window, '__capital_wizard', {
-                            configurable: true,
-                            set: function(v) { _origAuth = v; },
-                            get: function() {
-                                if (_origAuth) {
-                                    // Once the real object is set, inject auth immediately
-                                    try {
-                                        _origAuth.auth({"auth_token":"$accessToken","refresh_token":"$refreshToken"}, '*');
-                                    } catch(e) {}
-                                }
-                                return _origAuth;
-                            }
-                        });
-                    })();
-                """.trimIndent()
-                webView.evaluateJavascript(authScript, null)
-            }
-
-            CWLog.log("Loading URL: ${WebViewBridge.BASE_URL} (auth=${accessToken != null})", category = "WebView")
-            webView.loadUrl(WebViewBridge.BASE_URL)
+            // Start listening for live links only now. Subscribing earlier would
+            // race this coroutine: a link landing before buildStartUrl() ran would
+            // be routed and then immediately overwritten by the initial load.
+            deepLinkService?.onDeepLink?.subscribe(onDeepLinkCallback)
         }
+    }
+
+    /**
+     * The first URL to load. A link stashed before this WebView existed — a cold
+     * start, or one that sat through the sign-in gate — becomes the very first URL,
+     * so the user lands on it directly instead of watching the root redirect.
+     * [DeepLinkService.consumePendingPath] clears it, so a later reload (the
+     * resume-from-background recovery, say) won't silently repeat the navigation.
+     */
+    private fun buildStartUrl(): String {
+        val base = WebViewBridge.baseUrl(this)
+        val path = deepLinkService?.consumePendingPath() ?: return base
+        // Both sides carry a slash: the base URL ends with one, the route starts with one.
+        return base + path.removePrefix("/")
+    }
+
+    /**
+     * Shows a link that arrived while this WebView was already alive. Prefers an
+     * in-place route through the bridge — that keeps the session and skips a full
+     * reload — and falls back to loading the URL outright if the bridge isn't up.
+     */
+    private fun routePendingDeepLink() {
+        val path = deepLinkService?.consumePendingPath() ?: return
+
+        if (bridge.isReady && bridge.pushNavigate(path)) {
+            CWLog.log("Routed $path in place", category = "DeepLink")
+            return
+        }
+
+        CWLog.log("Bridge not ready — routing $path via a full load", category = "DeepLink")
+        webView.loadUrl(WebViewBridge.baseUrl(this) + path.removePrefix("/"))
     }
 
     private fun revealWebView() {
@@ -320,14 +415,19 @@ class WebViewActivity : AppCompatActivity() {
         finish()
     }
 
-    @Deprecated("Use onBackPressedDispatcher")
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
+    /**
+     * Re-entry with a link. LoginActivity is the app's front door, so a link tapped
+     * while the app is backgrounded lands there first and comes back here via
+     * CLEAR_TOP + SINGLE_TOP — carrying no data of its own, because the route was
+     * already stashed in [DeepLinkService]. A VIEW intent delivered straight to this
+     * Activity is covered too: [DeepLinkService.handle] is a no-op when there is
+     * nothing routable to read.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        deepLinkService?.handle(intent.data)
+        routePendingDeepLink()
     }
 
     override fun onStop() {
@@ -370,6 +470,11 @@ class WebViewActivity : AppCompatActivity() {
         pingWebContent { healthy ->
             if (healthy) {
                 CWLog.log("Health ping OK — WebView left as-is", category = "WebView")
+                // Left as-is is right for the PAGE and wrong for anything on it
+                // describing the world outside the app. Tell the web app it is
+                // back so those screens can re-read; it decides what is worth
+                // refreshing, which is why this is a ping and not a reload.
+                bridge.pushForeground()
             } else {
                 CWLog.log("Health ping failed (unresponsive/blank) — reloading WebView", category = "WebView")
                 recreateOnce()
@@ -427,9 +532,28 @@ class WebViewActivity : AppCompatActivity() {
         recreate()
     }
 
+    /**
+     * The Android 13+ notification prompt is raised by PushService but answered
+     * here — permission results only ever reach the Activity that asked.
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != PushService.PERMISSION_REQUEST_CODE) return
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+        pushService?.onPermissionResult(this, granted)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         authService?.onLogout?.unsubscribe(onLogoutCallback)
+        deepLinkService?.onDeepLink?.unsubscribe(onDeepLinkCallback)
+        pushService?.onRegistration?.unsubscribe(onPushRegistrationCallback)
+        pushService?.onOpenRecorded?.unsubscribe(onOpenRecordedCallback)
         bridge.onAppReady -= onAppReadyCallback
         bridge.webView = null
         webView.destroy()

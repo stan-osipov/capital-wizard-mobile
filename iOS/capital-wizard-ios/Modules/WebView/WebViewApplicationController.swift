@@ -212,8 +212,16 @@ class WebViewApplicationController: ApplicationViewController {
     }
 
     private func getNativeAppScript() -> WKUserScript {
+        // `idiom` lets the web app pick its chrome: 'phone' → mobile chrome,
+        // 'pad' → desktop chrome with side-panel pinning disabled.
+        let idiom = UIDevice.current.userInterfaceIdiom == .pad ? "pad" : "phone"
+        // `endpoint` names the site this WebView was pointed at, so the admin
+        // header can state it rather than infer it. Read at creation time — the
+        // switch rebuilds the WebView, so this script always describes the load
+        // it is attached to.
+        let endpoint = EndpointStore.current.rawValue
         let source = """
-        window.__capital_wizard_native = { platform: 'ios' };
+        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)' };
         document.documentElement.classList.add('cw-native-ios');
         """
         return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)

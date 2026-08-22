@@ -1,10 +1,18 @@
 package com.capitalwizard.android.webview
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.capitalwizard.android.services.AuthService
+import com.capitalwizard.android.services.PushRegistration
+import com.capitalwizard.android.services.PushService
 import com.capitalwizard.android.utils.CWLog
+import com.capitalwizard.android.utils.AppEndpoint
 import com.capitalwizard.android.utils.DeviceKvStore
+import com.capitalwizard.android.utils.EndpointStore
 import com.capitalwizard.android.utils.Event
 import com.capitalwizard.android.utils.ServiceManager
 import com.capitalwizard.android.utils.ThemePrefs
@@ -18,13 +26,73 @@ class WebViewBridge {
 
     val onAppReady = Event<Unit>()
 
+    /**
+     * Fires only when a `set-endpoint` actually MOVED the shell to the other
+     * site; the Activity answers by restarting the web layer.
+     */
+    val onEndpointChanged = Event<AppEndpoint>()
+
     var webView: WebView? = null
     var isReady: Boolean = false
         private set
 
     companion object {
         const val JS_INTERFACE_NAME = "androidCW"
-        const val BASE_URL = "https://capital-wizard.com/"
+
+        /**
+         * The site this shell is currently pointed at — production by default,
+         * the development one when an admin has switched it (see [EndpointStore]).
+         * Resolved per call rather than held in a constant so every caller — the
+         * start URL, the deep-link loader, and both same-host navigation checks —
+         * follows the switch together. A stale one of those would send in-app
+         * links out to the system browser.
+         */
+        fun baseUrl(context: Context): String = EndpointStore.baseUrl(context)
+
+        /**
+         * Scheme + host (+ port) of [baseUrl] — the origin rule document-start
+         * scripts are scoped to, so a script carrying this device's session can
+         * only ever run on our own site, never on a page some redirect wandered
+         * onto.
+         */
+        fun originRule(context: Context): String {
+            val uri = Uri.parse(baseUrl(context))
+            val port = if (uri.port != -1) ":${uri.port}" else ""
+            return "${uri.scheme}://${uri.host}$port"
+        }
+    }
+
+    /**
+     * The session handed to the web app at DOCUMENT START, before any of the
+     * page's own scripts run.
+     *
+     * The web app queues the call in `window.__capital_wizard._pending` and
+     * drains it as `nativeBridge.ts` evaluates — which is before it wakes a
+     * single service. That ordering is the whole point: services wake once, and
+     * one that reads Supabase before the session lands stays signed-out for the
+     * life of the document, leaving a shell with no space and no active app.
+     *
+     * `index.html` defines the same queue stub, but it sits at the end of
+     * `<body>` and this runs before `<head>`, so the script defines the stub
+     * itself; the page's own `window.__capital_wizard || {…}` then keeps ours.
+     *
+     * iOS states this as a `WKUserScript` at `.atDocumentEnd` instead — WebKit
+     * has no document-start hook that would still let the page keep the queue,
+     * and by document end the page's stub is up. Same contract, each platform's
+     * own API.
+     */
+    fun getAuthSeedScript(accessToken: String, refreshToken: String): String {
+        val json = JSONObject().apply {
+            put("auth_token", accessToken)
+            put("refresh_token", refreshToken)
+        }
+        return """
+            window.__capital_wizard = window.__capital_wizard || {
+                _pending: [],
+                auth: function (p, o) { this._pending.push({ params: p, origin: o }); }
+            };
+            window.__capital_wizard.auth($json, '*');
+        """.trimIndent()
     }
 
     fun injectAuthScript(accessToken: String, refreshToken: String) {
@@ -40,10 +108,21 @@ class WebViewBridge {
         isReady = false
     }
 
-    fun getNativeAppScript(): String = """
-        window.__capital_wizard_native = { platform: 'android' };
-        document.documentElement.classList.add('cw-native-android');
-    """.trimIndent()
+    fun getNativeAppScript(): String {
+        // `idiom` lets the web app pick its chrome: 'phone' → mobile chrome,
+        // 'pad' (tablet) → desktop chrome with side-panel pinning disabled.
+        val smallestWidthDp = webView?.context?.resources?.configuration?.smallestScreenWidthDp ?: 0
+        val idiom = if (smallestWidthDp >= 600) "pad" else "phone"
+        // `endpoint` names the site this WebView was pointed at, so the admin
+        // header can state it rather than infer it. Read at injection time — the
+        // switch restarts the Activity, so this always describes the live load.
+        val endpoint = webView?.context?.let { EndpointStore.current(it).channel }
+            ?: AppEndpoint.PRODUCTION.channel
+        return """
+            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint' };
+            document.documentElement.classList.add('cw-native-android');
+        """.trimIndent()
+    }
 
     /**
      * Native → web (pre-paint seed). Writes the saved web theme/accent into localStorage so
@@ -119,6 +198,156 @@ class WebViewBridge {
                 if (cw && typeof cw.theme === 'function') { cw.theme($payload); }
             }catch(e){}})();
         """.trimIndent()
+    }
+
+    /**
+     * Best-effort runtime native → web route push: opens [path] in the live web app via
+     * `window.__capital_wizard.navigate({…})`. Used for a link tapped while this WebView was
+     * already running — routing in place keeps the session and skips the full reload a fresh
+     * `loadUrl` would cost.
+     *
+     * Guarded like the theme push: older web builds predate `navigate` and simply have no such
+     * function, so the call no-ops. Returns `false` when there is no live WebView to push into,
+     * so the caller can fall back to loading the route outright.
+     */
+    fun pushNavigate(path: String): Boolean {
+        val view = webView ?: return false
+        val payload = JSONObject().apply { put("path", path) }
+        view.evaluateJavascript(
+            """
+            (function(){try{
+                var cw = window.__capital_wizard;
+                if (cw && typeof cw.navigate === 'function') { cw.navigate($payload); }
+            }catch(e){}})();
+            """.trimIndent(),
+            null
+        )
+        return true
+    }
+
+    /**
+     * Best-effort runtime native → web push registration: hands the FCM token
+     * (or a refusal) to the live web app via `window.__capital_wizard.push({…})`.
+     *
+     * Guarded like the theme push — an older web build has no such function and
+     * the call simply no-ops. A payload with no `token` is how a refused
+     * permission is reported; the web side stops waiting either way.
+     * [failureReason] says WHY there is no token (`denied` / `unavailable` /
+     * `error`) so the web's decline log never counts a Firebase-less build as a
+     * user refusing.
+     */
+    fun pushRegistration(registration: PushRegistration?, failureReason: String? = null) {
+        val view = webView ?: return
+        val payload = JSONObject().apply {
+            put("platform", "android")
+            if (registration == null) {
+                put("permission", "denied")
+                if (!failureReason.isNullOrBlank()) put("reason", failureReason)
+            } else {
+                put("permission", "granted")
+                put("token", registration.token)
+                put("deviceName", registration.deviceName)
+                put("appVersion", registration.appVersion)
+                put("bundleId", registration.packageName)
+            }
+        }
+        view.post {
+            view.evaluateJavascript(
+                """
+                (function(){try{
+                    var cw = window.__capital_wizard;
+                    if (cw && typeof cw.push === 'function') { cw.push($payload); }
+                }catch(e){}})();
+                """.trimIndent(),
+                null
+            )
+        }
+    }
+
+    /**
+     * Best-effort runtime native → web tap report: hands the tapped
+     * notifications' send ids to the live web app via
+     * `window.__capital_wizard.pushOpened({…})`, which counts them through its
+     * authenticated RPC. Guarded like the other pushes — an older web build has
+     * no such function and the call simply no-ops.
+     */
+    fun pushOpened(sendIds: List<String>) {
+        if (sendIds.isEmpty()) return
+        val view = webView ?: return
+        val payload = JSONObject().apply {
+            put("platform", "android")
+            put("sendIds", JSONArray(sendIds))
+        }
+        view.post {
+            view.evaluateJavascript(
+                """
+                (function(){try{
+                    var cw = window.__capital_wizard;
+                    if (cw && typeof cw.pushOpened === 'function') { cw.pushOpened($payload); }
+                }catch(e){}})();
+                """.trimIndent(),
+                null
+            )
+        }
+    }
+
+    /**
+     * Best-effort runtime native → web push status: hands the OS notification
+     * state to the live web app via `window.__capital_wizard.pushStatus({…})`.
+     * Guarded like the other pushes — an older web build has no such function
+     * and the call simply no-ops, which the web side reads as "unknown" rather
+     * than as "off".
+     */
+    fun pushStatus(permission: String) {
+        val view = webView ?: return
+        val payload = JSONObject().apply {
+            put("platform", "android")
+            put("permission", permission)
+        }
+        view.post {
+            view.evaluateJavascript(
+                """
+                (function(){try{
+                    var cw = window.__capital_wizard;
+                    if (cw && typeof cw.pushStatus === 'function') { cw.pushStatus($payload); }
+                }catch(e){}})();
+                """.trimIndent(),
+                null
+            )
+        }
+    }
+
+    /**
+     * Best-effort runtime native → web foreground ping via
+     * `window.__capital_wizard.foreground({…})`.
+     *
+     * `document.visibilitychange` would be the obvious way for the web app to
+     * notice a return from the background, and it is not dependable here: this
+     * Activity does not call the WebView's own onPause/onResume (see the
+     * deliberate no-needless-reload policy in WebViewActivity.onResume), so
+     * whether Chromium flips visibilityState on an app switch is up to the
+     * platform. Screens describing state changed from OUTSIDE the app — the
+     * import notification card, which reports an OS permission the user may
+     * have just left to flip — need a signal that actually fires.
+     *
+     * Guarded like the other pushes: an older web build has no `foreground`
+     * function and the call simply no-ops. The web app also still listens to
+     * visibilitychange, so both firing costs one guarded read rather than two.
+     */
+    fun pushForeground() {
+        val view = webView ?: return
+        val payload = JSONObject().apply { put("platform", "android") }
+        view.post {
+            view.evaluateJavascript(
+                """
+                (function(){try{
+                    var cw = window.__capital_wizard;
+                    if (cw && typeof cw.foreground === 'function') { cw.foreground($payload); }
+                }catch(e){}})();
+                """.trimIndent(),
+                null
+            )
+        }
     }
 
     fun getZoomDisableScript(): String = """
@@ -202,6 +431,86 @@ class WebViewBridge {
                 val requestId = if (json.has("requestId")) json.optInt("requestId") else null
                 sendLogs(requestId)
             }
+            "request-push-token" -> requestPushToken()
+            "request-push-status" -> reportPushStatus()
+            "open-push-settings" -> openPushSettings()
+            "set-endpoint" -> setEndpoint(json.optString("endpoint"))
+        }
+    }
+
+    /**
+     * Web → native: `{ type: "system", eventName: "set-endpoint", endpoint }` —
+     * an admin re-pointing the app at the production or the development site.
+     *
+     * What arrives is a channel NAME, and it is resolved through [EndpointStore]'s
+     * allowlist; the two addresses never cross the bridge. That is what makes this
+     * safe to expose on `window`: the worst a hostile script in the page can do is
+     * send the user to the other site of ours.
+     *
+     * This callback runs on a binder thread, so it hops to the WebView's thread
+     * before touching preferences and the Activity — the pattern used by the theme
+     * and KV handlers above.
+     */
+    private fun setEndpoint(name: String?) {
+        val endpoint = EndpointStore.endpointNamed(name?.takeIf { it.isNotBlank() })
+        if (endpoint == null) {
+            CWLog.log("Ignoring set-endpoint for an unknown endpoint", category = "Bridge")
+            return
+        }
+        val view = webView ?: return
+        view.post {
+            val context = view.context ?: return@post
+            if (!EndpointStore.set(context, endpoint)) return@post
+            onEndpointChanged.invoke(endpoint)
+        }
+    }
+
+    /**
+     * Web → native: what is the OS notification state right now?
+     *
+     * Reads it rather than requesting anything — this is the settings screen
+     * asking, not the app asking for access, so no prompt may appear.
+     */
+    private fun reportPushStatus() {
+        val view = webView ?: return
+        view.post {
+            val service = ServiceManager.getService<PushService>()
+            val context = view.context ?: return@post
+            // A shell without the service can't answer; staying silent is
+            // correct — the web side times out and shows nothing rather than
+            // claiming notifications are off.
+            val permission = service?.readPermission(context.applicationContext) ?: return@post
+            pushStatus(permission)
+        }
+    }
+
+    /** Web → native: take the user to this app's notification settings. */
+    private fun openPushSettings() {
+        val view = webView ?: return
+        view.post {
+            var context = view.context
+            while (context is ContextWrapper && context !is Activity) {
+                context = context.baseContext
+            }
+            ServiceManager.getService<PushService>()?.openSystemSettings(context ?: return@post)
+        }
+    }
+
+    /**
+     * Web → native: the app is signed in and wants this device's push token.
+     *
+     * The Android 13+ permission dialog needs a live Activity, and this callback
+     * arrives on a binder thread, so it hops to the WebView's thread and unwraps
+     * the Activity from its context.
+     */
+    private fun requestPushToken() {
+        val view = webView ?: return
+        view.post {
+            var context = view.context
+            while (context is ContextWrapper && context !is Activity) {
+                context = context.baseContext
+            }
+            ServiceManager.getService<PushService>()?.requestRegistration(context as? Activity)
         }
     }
 

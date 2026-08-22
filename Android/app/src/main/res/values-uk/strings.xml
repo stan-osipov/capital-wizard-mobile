@@ -65,4 +65,8 @@
     <!-- Accessibility -->
     <string name="cd_language_toggle">Змінити мову</string>
     <string name="cd_brand_logo">Capital Wizard</string>
+
+    <!-- Notification channel shown in the system settings list -->
+    <string name="push_channel_name">Загальні</string>
+    <string name="push_channel_description">Нагадування та оновлення від Capital Wizard</string>
 </resources>

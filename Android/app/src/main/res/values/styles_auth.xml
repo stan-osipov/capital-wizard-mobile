@@ -3,6 +3,13 @@
 
     <!-- ===== Auth screen shared styles ===== -->
 
+    <!-- Base of the "Auth.*" family. Dot-notation names imply a parent style of
+         everything before the last dot, so the members below that do NOT set an
+         explicit `parent` resolve against this one; without it AAPT fails the
+         resource link with "resource style/Auth not found". Intentionally empty —
+         it carries no attributes, it just anchors the family. -->
+    <style name="Auth" />
+
     <!-- H1 page title (~24sp bold) -->
     <style name="Auth.Title">
         <item name="android:layout_width">match_parent</item>

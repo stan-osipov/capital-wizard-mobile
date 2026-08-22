@@ -14,8 +14,9 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Splash overlay -->
-    <View
+    <!-- Splash overlay: in-app "Line Draw" W, drawn in the user's accent (the OS
+         system splash W can't read a per-user accent). Bridges to the WebView. -->
+    <com.capitalwizard.android.ui.SplashWView
         android:id="@+id/splash_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

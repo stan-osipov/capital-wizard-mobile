@@ -50,7 +50,10 @@ class AuthService: NSObject, Service {
                 }
             } catch {
                 SplashAnimationView.postStatus("No active session")
-                try? await client.signOut()
+                // Restoring failed on THIS device — clear it and nothing else. A default
+                // `.global` sign-out here would let a launch-time network blip on the
+                // phone take down the user's sessions everywhere.
+                try? await client.signOut(scope: .local)
                 session = nil
                 isLoggedIn = false
                 await MainActor.run {
@@ -119,7 +122,10 @@ class AuthService: NSObject, Service {
     func signOut() async throws {
         // Ignore server-side error — the web app may have already invalidated the session.
         // Always clear local state and notify subscribers regardless.
-        try? await client.signOut()
+        // `.local` ends THIS session only. The SDK default is `.global`, which revokes
+        // every refresh token on the account — logging the user out of their desktop
+        // and every other device the moment they log out on the phone.
+        try? await client.signOut(scope: .local)
         session = nil
         isLoggedIn = false
         await MainActor.run {

@@ -4,6 +4,7 @@
 //
 //  Created by Roman on 07.02.2026.
 //
+import UIKit
 import WebKit
 
 struct WebApiError: Error, ErrorMessage {
@@ -17,6 +18,9 @@ struct WebApiError: Error, ErrorMessage {
 class WebViewCommunication: NSObject {
     var contentController: WKUserContentController
     var onAppReady: Event<Void> = Event()
+    /// Fires only when a `set-endpoint` actually MOVED the shell to the other
+    /// site; the owning application answers by restarting the web layer.
+    var onEndpointChanged: Event<Void> = Event()
 
     weak var wkWebView: WKWebView?
 
@@ -43,8 +47,34 @@ class WebViewCommunication: NSObject {
         super.init()
 
         contentController.add(self, name: WebViewApplicationConst.contentControllerName)
+
+        // Tell the web app every time we come back to the foreground. It cannot
+        // rely on visibilitychange for this (see WebApicForegroundCall), and a
+        // screen showing an OS-owned setting is stale the moment the user walks
+        // into Settings to change it.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(notifyForeground),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
     }
-    
+
+    @objc private func notifyForeground() {
+        pushForeground()
+    }
+
+    /// Best-effort runtime native → web foreground ping via
+    /// `window.__capital_wizard.foreground({…})`. No-op before the first load
+    /// finishes — a page that has not rendered yet has nothing stale to refresh.
+    func pushForeground() {
+        guard didFinalizeLoad, let wkWebView = wkWebView else { return }
+        guard let js = try? WebApicForegroundCall().apiCall else { return }
+        DispatchQueue.main.async {
+            wkWebView.evaluateJavaScript(js)
+        }
+    }
+
     func clearData() {
         didFinalizeLoad = false
 
@@ -126,6 +156,57 @@ class WebViewCommunication: NSObject {
         wkWebView.evaluateJavaScript(js)
     }
     
+    /// Best-effort runtime native → web route push: opens `path` in the live web
+    /// app via `window.__capital_wizard.navigate({…})`. Returns `false` when the
+    /// WebView isn't ready, so the caller can leave the link stashed for the next
+    /// initial load instead of dropping it.
+    @discardableResult
+    func pushNavigate(path: String) -> Bool {
+        guard didFinalizeLoad, let wkWebView = wkWebView else { return false }
+        let call = WebApicNavigateCall(path: path)
+        guard let js = try? call.apiCall else { return false }
+        wkWebView.evaluateJavaScript(js)
+        return true
+    }
+
+    /// Best-effort runtime native → web push registration: hands the APNs token
+    /// (or a refusal) to the live web app via `window.__capital_wizard.push({…})`.
+    /// No-op when the WebView isn't ready — the web side asks again on the next
+    /// sign-in, so nothing is lost.
+    func pushRegistration(_ registration: PushRegistration?, failureReason: String? = nil) {
+        guard didFinalizeLoad, let wkWebView = wkWebView else { return }
+        let call = WebApicPushCall(registration: registration, failureReason: failureReason)
+        guard let js = try? call.apiCall else { return }
+        wkWebView.evaluateJavaScript(js)
+    }
+
+    /// Best-effort runtime native → web tap report: hands the tapped
+    /// notifications' send ids to the live web app via
+    /// `window.__capital_wizard.pushOpened({…})`, which counts them through its
+    /// authenticated RPC. Returns `false` when the WebView isn't ready, so the
+    /// caller can leave the ids stashed for the app-ready flush instead of
+    /// losing them.
+    @discardableResult
+    func pushOpened(sendIds: [String]) -> Bool {
+        guard !sendIds.isEmpty else { return true }
+        guard didFinalizeLoad, let wkWebView = wkWebView else { return false }
+        let call = WebApicPushOpenedCall(sendIds: sendIds)
+        guard let js = try? call.apiCall else { return false }
+        wkWebView.evaluateJavaScript(js)
+        return true
+    }
+
+    /// Best-effort runtime native → web push status: hands the OS notification
+    /// permission to the live web app via `window.__capital_wizard.pushStatus({…})`.
+    /// No-op when the WebView isn't ready — the web side asks again whenever the
+    /// screen that cares about it opens.
+    func pushStatus(permission: String) {
+        guard didFinalizeLoad, let wkWebView = wkWebView else { return }
+        let call = WebApicPushStatusCall(permission: permission)
+        guard let js = try? call.apiCall else { return }
+        wkWebView.evaluateJavaScript(js)
+    }
+
     private func finilizeLoad() {
         Task(priority: .high) {
             didFinalizeLoad = true
@@ -169,7 +250,8 @@ extension WebViewCommunication: WKScriptMessageHandler {
                 parseThemeResponse(dict)
             case .kv:
                 parseKvResponse(dict)
-            case .auth:
+            case .auth, .navigate, .push, .pushOpened, .pushStatus, .foreground:
+                // Native → web only; the web app never posts these back.
                 break
             }
         }
@@ -230,6 +312,47 @@ extension WebViewCommunication: WKScriptMessageHandler {
 
         if eventName == "open-external-url" {
             openExternalUrl(dict["url"])
+        }
+
+        if eventName == "request-push-token" {
+            let pushService: PushService? = ServiceManager.shared.getService()
+            pushService?.requestRegistration()
+        }
+
+        // Reads the permission WITHOUT prompting — this is the settings screen
+        // asking what the state is, not the app asking for access.
+        if eventName == "request-push-status" {
+            let pushService: PushService? = ServiceManager.shared.getService()
+            pushService?.readPermission { [weak self] permission in
+                self?.pushStatus(permission: permission)
+            }
+        }
+
+        if eventName == "open-push-settings" {
+            let pushService: PushService? = ServiceManager.shared.getService()
+            pushService?.openSystemSettings()
+        }
+
+        if eventName == "set-endpoint" {
+            setEndpoint(dict["endpoint"])
+        }
+    }
+
+    /// Handles `{ type: "system", eventName: "set-endpoint", endpoint }` — an
+    /// admin re-pointing the app at the production or the development site.
+    ///
+    /// What arrives is a channel NAME, and it is resolved through
+    /// `EndpointStore`'s allowlist; the two addresses never cross the bridge.
+    /// That is what makes this safe to expose on `window`: the worst a hostile
+    /// script in the page can do is send the user to the other site of ours.
+    private func setEndpoint(_ raw: Any?) {
+        guard let endpoint = EndpointStore.endpoint(named: raw) else {
+            CWLog.shared.log("Ignoring set-endpoint for an unknown endpoint", category: "Bridge")
+            return
+        }
+        DispatchQueue.main.async {
+            guard EndpointStore.set(endpoint) else { return }
+            self.onEndpointChanged.invoke(())
         }
     }
 

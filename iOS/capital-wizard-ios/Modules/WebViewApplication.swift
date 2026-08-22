@@ -10,7 +10,14 @@ import UIKit
 
 struct WebViewApplicationConst {
     static let baseUrlKey = "applicationBaseUrl"
-    static let applicationBaseUrl    = "https://capital-wizard.com/"
+
+    /// The site this shell is currently pointed at — production by default, the
+    /// development one when an admin has switched it (see `EndpointStore`).
+    /// Computed rather than constant so every caller — the initial load, the
+    /// route builder, and both same-host navigation checks — follows the switch
+    /// together. A stale one of those would send in-app links out to Safari.
+    static var applicationBaseUrl: String { EndpointStore.baseUrl }
+
     static let contentControllerName = "iosCW"
 
     /// Shared process pool so all WebViews share cookies and sessions.
@@ -51,9 +58,16 @@ class WebViewApplication: NSObject, Application {
     lazy var webViewCommunication: WebViewCommunication  = WebViewCommunication()
     lazy var windowsService:       WindowsService?       = ServiceManager.shared.getService()
     lazy var applicationService:   ApplicationService?   = ServiceManager.shared.getService()
+    lazy var deepLinkService:      DeepLinkService?      = ServiceManager.shared.getService()
+    lazy var pushService:          PushService?          = ServiceManager.shared.getService()
 
     private lazy var onColorChangeHandler: EventCallback = EventCallback(onColorSchemeChanged(_:))
     private lazy var onAppReadyHandler:    EventCallback = EventCallback(onAppReady)
+    private lazy var onEndpointChangedHandler: EventCallback = EventCallback(onEndpointChanged)
+    private lazy var onDeepLinkHandler:    EventCallback = EventCallback(onDeepLink(_:))
+    private lazy var onPushRegistrationHandler: EventCallback<PushRegistration?> = EventCallback(onPushRegistration(_:))
+    private lazy var onExternalURLHandler:      EventCallback<Void> = EventCallback(onExternalURL(_:))
+    private lazy var onOpenRecordedHandler:     EventCallback<Void> = EventCallback(onOpenRecorded(_:))
 
     init(appData: ApplicationData, hasNavigationBar: Bool, tagIndex: Int) {
         self.appData            = appData
@@ -83,6 +97,11 @@ class WebViewApplication: NSObject, Application {
     func start() {
         windowsService?.onColorSchemeChanged += onColorChangeHandler
         webViewCommunication.onAppReady += onAppReadyHandler
+        webViewCommunication.onEndpointChanged += onEndpointChangedHandler
+        deepLinkService?.onDeepLink += onDeepLinkHandler
+        pushService?.onRegistration += onPushRegistrationHandler
+        pushService?.onExternalURL += onExternalURLHandler
+        pushService?.onOpenRecorded += onOpenRecordedHandler
 
         // Detect resume-from-background so we can recover a WebView whose
         // web-content process was killed (or whose content was discarded) while
@@ -96,10 +115,108 @@ class WebViewApplication: NSObject, Application {
         CWLog.shared.log("WebView application started (id=\(id))", category: "WebView")
     }
 
+    /// A link arrived while this app instance was alive. If the web bridge is up
+    /// we route in place; if it isn't — still on the splash, signed out, or the
+    /// WebView not built yet — we leave the path stashed and let the next initial
+    /// load consume it, so the link is never lost and never applied twice.
+    private func onDeepLink(_ path: String) {
+        guard webViewCommunication.isReady else {
+            CWLog.shared.log("Deep link \(path) arrived before the bridge was ready — leaving it stashed",
+                             category: "DeepLink")
+            return
+        }
+        guard let pending = deepLinkService?.consumePendingPath() else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.webViewCommunication.pushNavigate(path: pending) { return }
+
+            // The bridge died between the check and the push — fall back to a
+            // full load so the link still lands.
+            CWLog.shared.log("Route push failed — falling back to a full load of \(pending)", category: "DeepLink")
+            if let url = try? self.getUrl(from: String(pending.dropFirst())) {
+                self.webViewController?.reload(with: url)
+            }
+        }
+    }
+
+    /// APNs answered the web app's token request. Forward it over the bridge so
+    /// the web side can store it against the signed-in account. A refusal comes
+    /// through as `nil` and is forwarded too — the web app is waiting for an
+    /// answer, not necessarily a token.
+    private func onPushRegistration(_ registration: PushRegistration?) {
+        DispatchQueue.main.async { [weak self] in
+            self?.webViewCommunication.pushRegistration(
+                registration,
+                failureReason: self?.pushService?.lastFailureReason
+            )
+        }
+    }
+
+    /// A tapped notification carried an external page. Show it only if the app
+    /// is already up; on a cold start the bridge is not ready yet and the page
+    /// stays stashed for `onAppReady` below — presenting over a launching app is
+    /// what wedged it behind the splash.
+    private func onExternalURL(_: Void) {
+        guard webViewCommunication.isReady else {
+            CWLog.shared.log("External link arrived before the app was up — leaving it stashed",
+                             category: "Push")
+            return
+        }
+        if let url = pushService?.consumePendingExternalURL() {
+            PushService.presentExternal(url)
+        }
+    }
+
+    /// A tapped notification carried a click-tracking id. Forward it if the
+    /// bridge is live (a warm tap); otherwise leave it stashed — a cold start's
+    /// ids are flushed by `onAppReady`, which is also the earliest moment the
+    /// web app's session is restored enough to report them.
+    private func onOpenRecorded(_: Void) {
+        guard webViewCommunication.isReady else {
+            CWLog.shared.log("Tap report arrived before the app was up — leaving it stashed",
+                             category: "Push")
+            return
+        }
+        flushOpenReports()
+    }
+
+    /// Hands the stashed tap ids to the web app. Consuming clears the stash, so
+    /// a failed push puts nothing back — dropping a best-effort statistic beats
+    /// machinery to retry it.
+    private func flushOpenReports() {
+        guard let ids = pushService?.consumePendingOpenReports(), !ids.isEmpty else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.webViewCommunication.pushOpened(sendIds: ids)
+        }
+    }
+
+    /// An admin switched the endpoint from inside the web app. The new address
+    /// is already persisted; rebuilding the WebView is what moves us onto it —
+    /// a plain reload would re-fetch the OLD url and would also keep the
+    /// document-start script that told the page which site it was on.
+    private func onEndpointChanged() {
+        CWLog.shared.log("Endpoint changed — restarting the web layer", category: "WebView")
+        DispatchQueue.main.async { [weak self] in
+            self?.recreateWebView()
+        }
+    }
+
     private func onAppReady() {
         CWLog.shared.log("Web app reported ready — revealing WebView", category: "WebView")
+
+        // The web app is signed in and rendering, so taps stashed through a
+        // cold launch can finally be reported.
+        flushOpenReports()
+
         DispatchQueue.main.async { [weak self] in
             self?.webViewController?.revealWebView()
+
+            // The app is now genuinely on screen, so a link stashed during a cold
+            // launch is finally safe to present over it.
+            if let url = self?.pushService?.consumePendingExternalURL() {
+                PushService.presentExternal(url)
+            }
         }
     }
     
@@ -113,7 +230,11 @@ class WebViewApplication: NSObject, Application {
         
         windowsService?.onColorSchemeChanged -= onColorChangeHandler
         webViewCommunication.onAppReady -= onAppReadyHandler
-        
+        webViewCommunication.onEndpointChanged -= onEndpointChangedHandler
+        deepLinkService?.onDeepLink -= onDeepLinkHandler
+        pushService?.onRegistration -= onPushRegistrationHandler
+        pushService?.onExternalURL -= onExternalURLHandler
+
         let notificationCenter = NotificationCenter.default
         notificationCenter.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         notificationCenter.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
@@ -258,7 +379,19 @@ extension WebViewApplication: UrlFactory {
     func getInitialUrl() async throws -> URL {
         var stringUrl: String
         stringUrl = WebViewApplicationConst.applicationBaseUrl
-        stringUrl += "\(appData.baseUrl)"
+
+        // A link stashed before the WebView existed — a cold start, or one that
+        // sat through the sign-in gate — becomes the very first URL we load, so
+        // the user lands on it directly with no visible redirect from the root.
+        // `consumePendingPath` clears it, so a later reload won't repeat it.
+        if let path = deepLinkService?.consumePendingPath() {
+            // Both sides carry a slash: the base URL ends with one, the route
+            // starts with one.
+            stringUrl += String(path.dropFirst())
+        } else {
+            stringUrl += "\(appData.baseUrl)"
+        }
+
         guard let url = URL(string: stringUrl) else {
             throw WebViewError(message: "Couldn't create url from \(stringUrl)")
         }

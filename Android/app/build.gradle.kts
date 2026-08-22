@@ -7,6 +7,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Firebase Cloud Messaging is configured entirely by `app/google-services.json`,
+// which is not in source control. The google-services plugin HARD-FAILS the build
+// when that file is missing, so it is applied only when the file is there: a
+// checkout without Firebase credentials still builds and runs, it just has no
+// push token to hand over (PushService reports that and moves on).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {
@@ -17,14 +26,16 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "com.capitalwizard.android"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.capitalwizard.android"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // Google Play requires targeting within one year of the latest Android
+        // release (API 36 from 2026-08-31, and rolling forward each August).
+        targetSdk = 36
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -77,6 +88,11 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.lifecycle.runtime)
+
+    // Firebase Cloud Messaging (push). Harmless without google-services.json —
+    // the SDK simply never initialises.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     // Supabase
     implementation(platform(libs.supabase.bom))

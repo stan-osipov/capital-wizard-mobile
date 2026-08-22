@@ -96,6 +96,34 @@ extension UIColor {
         let b = CGFloat( hex        & 0xFF) / 255
         self.init(red: r, green: g, blue: b, alpha: alpha)
     }
+
+    /// Build a colour from an OKLCH triplet (L 0–1, chroma C, hue H in degrees),
+    /// so native surfaces can reproduce the web design-system's `oklch(...)`
+    /// accent tokens exactly (see ThemeService `ACCENT_PROFILE`). Converts
+    /// OKLCH → OKLab → linear sRGB (Björn Ottosson) → gamma-encoded sRGB.
+    convenience init(oklchL L: CGFloat, chroma C: CGFloat, hueDegrees H: CGFloat) {
+        // Compute in Double throughout, converting to CGFloat only at the init
+        // boundary — avoids CGFloat/Double mixed-arithmetic type errors.
+        let l = Double(L), c = Double(C), h = Double(H)
+        let hr = h * .pi / 180
+        let a = c * cos(hr)
+        let b = c * sin(hr)
+
+        let l_ = l + 0.3963377774 * a + 0.2158037573 * b
+        let m_ = l - 0.1055613458 * a - 0.0638541728 * b
+        let s_ = l - 0.0894841775 * a - 1.2914855480 * b
+        let l3 = l_ * l_ * l_, m3 = m_ * m_ * m_, s3 = s_ * s_ * s_
+
+        let rLin =  4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3
+        let gLin = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3
+        let bLin = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3
+
+        func enc(_ x: Double) -> CGFloat {
+            let v = max(0, min(1, x))
+            return CGFloat(v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055)
+        }
+        self.init(red: enc(rLin), green: enc(gLin), blue: enc(bLin), alpha: 1)
+    }
 }
 
 struct AppColors {
@@ -212,6 +240,35 @@ struct AppColors {
     /// pick up the system appearance when the theme preference is `.system`.
     static func colors(for style: UIUserInterfaceStyle) -> AppColors {
         AppColors(scheme: style == .dark ? .dark : .light)
+    }
+
+    /// Hue (and optional chroma override) per accent id — mirror of the web's
+    /// `ACCENT_SWATCHES` in ThemeService. `mono` forces chroma to 0.
+    private static let accentSwatches: [String: (hue: CGFloat, chroma: CGFloat?)] = [
+        "amber":  (55,  nil),
+        "indigo": (275, nil),
+        "blue":   (240, nil),
+        "teal":   (180, nil),
+        "green":  (145, nil),
+        "red":    (25,  nil),
+        "pink":   (350, nil),
+        "mono":   (240, 0),
+    ]
+
+    /// The user's chosen in-app accent, resolved to a native colour + soft glow
+    /// so brand surfaces that should track it (the launch splash W) match the
+    /// web instead of the fixed amber brand. Reads the accent id the WebView
+    /// last reported (`cw_web_accent`), defaulting to amber. Mirrors the web
+    /// `ACCENT_PROFILE` accent channel; dark-soft collapses to dark natively.
+    static func webAccent(isDark: Bool) -> (accent: UIColor, soft: UIColor) {
+        let id = UserDefaults.standard.string(forKey: WindowsServiceConst.webAccentKey) ?? "amber"
+        let sw = accentSwatches[id] ?? accentSwatches["amber"]!
+        let l: CGFloat = isDark ? 0.68 : 0.62
+        let c: CGFloat = sw.chroma ?? (isDark ? 0.16 : 0.17)
+        let accent = UIColor(oklchL: l, chroma: c, hueDegrees: sw.hue)
+        // Soft glow = the accent hue at low alpha (matches the prior amber glow
+        // model: dsAccentSoft used 0.20 dark / 0.16 light).
+        return (accent, accent.withAlphaComponent(isDark ? 0.20 : 0.16))
     }
 }
 

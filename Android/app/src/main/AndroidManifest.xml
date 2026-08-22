@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ gates notifications behind a runtime permission. It is asked
+         for only when the web app requests a push token, never at launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".CapitalWizardApp"
@@ -32,6 +35,58 @@
                     android:host="auth"
                     android:pathPrefix="/callback" />
             </intent-filter>
+
+            <!-- App links: app.capital-wizard.com routes open in the app.
+                 Verified against /.well-known/assetlinks.json on that host.
+
+                 iOS states this as "everything except the public pages" via the
+                 association file's exclude rules; Android intent filters have no
+                 negation, so the same intent is expressed as an allow-list of
+                 in-app route prefixes. Deliberately ABSENT — these must stay in
+                 the browser for people without the app: /privacy, /terms,
+                 /support, /s/ (public schedule shares), /preview, /oauth/.
+                 Keep in step with public/.well-known/apple-app-site-association
+                 in the web repo, which is the source of truth. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.capital-wizard.com" />
+
+                <data android:pathPrefix="/join" />
+
+                <data android:pathPrefix="/dashboard" />
+                <data android:pathPrefix="/transactions" />
+                <data android:pathPrefix="/import" />
+                <data android:pathPrefix="/assets" />
+                <data android:pathPrefix="/people" />
+                <data android:pathPrefix="/companies" />
+                <data android:pathPrefix="/projects" />
+                <data android:pathPrefix="/invoices" />
+                <data android:pathPrefix="/schedule" />
+                <data android:pathPrefix="/habits" />
+                <data android:pathPrefix="/time" />
+                <data android:pathPrefix="/showcase" />
+                <data android:pathPrefix="/admin" />
+                <data android:pathPrefix="/connect" />
+                <data android:pathPrefix="/support-center" />
+                <data android:pathPrefix="/settings" />
+                <data android:pathPrefix="/auth" />
+                <data android:pathPrefix="/profile" />
+                <data android:pathPrefix="/accounts" />
+                <data android:pathPrefix="/update-password" />
+            </intent-filter>
+
+            <!-- Routing fallback for contexts where app-link verification hasn't
+                 happened: capital-wizard-android://open?path=/join/abc -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="capital-wizard-android"
+                    android:host="open" />
+            </intent-filter>
         </activity>
 
         <activity
@@ -51,6 +106,32 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.CapitalWizard" />
+
+        <!-- Push. Handles token rotation and draws the notification when a
+             message arrives while the app is in the foreground (the system tray
+             only draws it for us when the app is backgrounded). -->
+        <service
+            android:name=".services.PushMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Applied to notifications the SYSTEM draws (app backgrounded), where
+             our NotificationCompat.Builder never runs. Keep in step with
+             PushMessagingService.onMessageReceived so both paths look alike. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_cw_mark" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/accent" />
+        <!-- Fallback only: the edge function names the channel on every message.
+             This catches anything sent without one. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="cw_general" />
 
         <!-- Enables AppCompat to persist the per-app locale (EN/UA toggle)
              across process death on API < 33. On API 33+ the framework

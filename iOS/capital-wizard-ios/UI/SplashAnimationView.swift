@@ -3,9 +3,10 @@
 //  capital-wizard-ios
 //
 //  "Line Draw" boot loader — the Capital Wizard W mark plotted as a rising
-//  chart line. A faint full W (track) sits underneath; an amber stroke draws
-//  itself along it, holds, fades, and repeats. Wordmark + a mono status
-//  caption sit below. Theme-aware (light + dark) via the design-system tokens.
+//  chart line. A faint full W (track) sits underneath; an accent-coloured
+//  stroke draws itself along it, holds, fades, and repeats. Wordmark + a mono
+//  status caption sit below. Theme-aware (light + dark) via the design-system
+//  tokens; the drawn stroke tracks the user's chosen in-app accent.
 //
 //  Source of truth: design_handoff_loader/ (README.md + "Line Draw Loader.html").
 //
@@ -153,12 +154,12 @@ class SplashAnimationView: UIView {
         trackLayer.lineCap = .round
         trackLayer.lineJoin = .round
 
-        // Line: amber W that draws itself.
+        // Line: accent-coloured W that draws itself.
         lineLayer.fillColor = UIColor.clear.cgColor
         lineLayer.lineCap = .round
         lineLayer.lineJoin = .round
         lineLayer.strokeEnd = 0
-        // Amber glow ≈ CSS drop-shadow(0 0 6px var(--accent-soft)).
+        // Accent glow ≈ CSS drop-shadow(0 0 6px var(--accent-soft)).
         lineLayer.shadowRadius = 6
         lineLayer.shadowOpacity = 1
         lineLayer.shadowOffset = .zero
@@ -311,9 +312,13 @@ class SplashAnimationView: UIView {
         let colors = self.colors
         backgroundColor = colors.dsBackground
 
+        // The drawn W tracks the user's in-app accent (mirrors the web
+        // preloader), not the fixed amber brand — resolved from the accent id
+        // the WebView last reported.
+        let accent = AppColors.webAccent(isDark: effectiveStyle == .dark)
         trackLayer.strokeColor = colors.dsBorder.cgColor
-        lineLayer.strokeColor  = colors.dsAccent.cgColor
-        lineLayer.shadowColor  = colors.dsAccentSoft.cgColor
+        lineLayer.strokeColor  = accent.accent.cgColor
+        lineLayer.shadowColor  = accent.soft.cgColor
 
         wordmarkLabel.attributedText = makeWordmarkText()
         statusLabel?.textColor = colors.dsTextSubtle
@@ -337,7 +342,7 @@ class SplashAnimationView: UIView {
     private func applyAnimations() {
         lineLayer.removeAllAnimations()
 
-        // Reduced motion: show the completed amber W, no draw loop, static "…".
+        // Reduced motion: show the completed accent W, no draw loop, static "…".
         guard !UIAccessibility.isReduceMotionEnabled else {
             lineLayer.strokeEnd = 1
             lineLayer.opacity = 1

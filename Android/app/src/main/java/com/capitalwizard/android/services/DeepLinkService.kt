@@ -26,6 +26,15 @@ class DeepLinkService {
     companion object {
         /** Host declared in the app-link intent filter. */
         const val LINK_HOST = "app.capital-wizard.com"
+        /**
+         * The marketing apex, claimed for referral links ONLY — the manifest
+         * narrows it to `/r` and the assetlinks file is shared with the app
+         * host. iOS expresses the same narrowing as an allow-list inside its
+         * association file, because there the domain default is the reverse.
+         */
+        const val REFERRAL_HOST = "capital-wizard.com"
+        /** Web route a referral code lands on. The register screen reads `ref`. */
+        const val REFERRAL_ROUTE = "/auth/register"
         /** Custom scheme registered in the manifest. */
         const val CUSTOM_SCHEME = "capital-wizard-android"
         /** Custom-scheme host reserved for routing. `auth` belongs to AuthService. */
@@ -36,14 +45,34 @@ class DeepLinkService {
          * the URI isn't one we route.
          */
         fun appPath(uri: Uri): String? = when (uri.scheme?.lowercase()) {
-            "https", "http" -> {
-                if (uri.host?.lowercase() != LINK_HOST) null
-                else normalized(uri.path, uri.query, uri.fragment)
+            "https", "http" -> when (uri.host?.lowercase()) {
+                LINK_HOST -> normalized(uri.path, uri.query, uri.fragment)
+                // The apex is claimed for one thing only, so it is TRANSLATED
+                // rather than passed through: `capital-wizard.com/r/STAN-8F2K`
+                // is a page on the marketing site and the app has no such
+                // route. It becomes the sign-up screen with the code attached.
+                REFERRAL_HOST -> referralCode(uri.path)?.let { "$REFERRAL_ROUTE?ref=$it" }
+                else -> null
             }
 
             CUSTOM_SCHEME -> customSchemePath(uri)
 
             else -> null
+        }
+
+        /**
+         * The code out of `/r/<CODE>`, upper-cased, or `null` when the path is
+         * not a referral link. The alphabet matches the database's own check
+         * constraint — anything else is not a code we could resolve anyway.
+         */
+        fun referralCode(path: String?): String? {
+            val parts = path.orEmpty().split("/").filter { it.isNotEmpty() }
+            if (parts.size != 2 || !parts[0].equals("r", ignoreCase = true)) return null
+            val code = parts[1].uppercase()
+            if (code.length !in 3..32) return null
+            if (!code.all { it.isLetterOrDigit() && it.code < 128 || it == '-' }) return null
+            if (code.first() == '-') return null
+            return code
         }
 
         /** `capital-wizard-android://open?path=/join/abc` → `/join/abc`. */

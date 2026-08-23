@@ -14,6 +14,12 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:app.capital-wizard.com</string>
+		<!-- The marketing apex, claimed for REFERRAL LINKS ONLY. Its
+		     association file is an allow-list of /r/* (the opposite shape to
+		     app.capital-wizard.com, which the app owns outright) so the
+		     homepage, pricing and blog keep opening in the browser. Source of
+		     truth: ../capital-wizard-promo/public/.well-known/apple-app-site-association -->
+		<string>applinks:capital-wizard.com</string>
 	</array>
 </dict>
 </plist>

@@ -7,6 +7,9 @@ material = "1.12.0"
 activity = "1.9.3"
 constraintlayout = "2.2.0"
 webkit = "1.12.1"
+# Play Install Referrer — carries a referral code through an install. iOS has
+# no counterpart; Apple provides no install-time payload at all.
+installreferrer = "2.2"
 supabase = "3.1.1"
 ktor = "3.0.3"
 serialization = "1.7.3"
@@ -24,6 +27,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 androidx-activity = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+installreferrer = { group = "com.android.installreferrer", name = "installreferrer", version.ref = "installreferrer" }
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 androidx-lifecycle-runtime = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 

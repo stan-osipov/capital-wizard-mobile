@@ -89,6 +89,14 @@ dependencies {
     implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.lifecycle.runtime)
 
+    // Play Install Referrer. Google's store hands the app whatever `referrer`
+    // was on the listing URL, ON FIRST LAUNCH AFTER INSTALL — which is how a
+    // referral code survives someone tapping a link, installing, and opening
+    // the app minutes later. Apple ships nothing equivalent, so iOS has no
+    // sibling for InstallReferrerService: there the code is carried by the
+    // person (printed on the claim page, typed into sign-up).
+    implementation(libs.installreferrer)
+
     // Firebase Cloud Messaging (push). Harmless without google-services.json —
     // the SDK simply never initialises.
     implementation(platform(libs.firebase.bom))

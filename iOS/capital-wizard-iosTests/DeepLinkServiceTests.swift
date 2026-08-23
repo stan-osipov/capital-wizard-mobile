@@ -24,6 +24,41 @@ struct DeepLinkServiceTests {
         #expect(DeepLinkService.appPath(from: url) == "/transactions/page/2?filter=open#row")
     }
 
+    // MARK: - Referral links on the marketing apex
+
+    @Test func translatesReferralLinkIntoSignUp() {
+        // The apex has no in-app route of its own: `/r/<CODE>` is a page on the
+        // marketing site, so it becomes the sign-up screen carrying the code.
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/r/STAN-8F2K")!)
+                == "/auth/register?ref=STAN-8F2K")
+    }
+
+    @Test func upperCasesReferralCode() {
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/r/stan-8f2k")!)
+                == "/auth/register?ref=STAN-8F2K")
+    }
+
+    @Test func ignoresTheRestOfTheMarketingSite() {
+        // Only /r/* is claimed. Everything else on that domain has to keep
+        // opening in the browser for people who do not have the app.
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/")!) == nil)
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/pricing/")!) == nil)
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/blog/a-post/")!) == nil)
+    }
+
+    @Test func rejectsMalformedReferralPaths() {
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/r/")!) == nil)
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/r/ab")!) == nil)
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/r/a/b")!) == nil)
+        #expect(DeepLinkService.appPath(from: URL(string: "https://capital-wizard.com/r/-lead")!) == nil)
+    }
+
+    @Test func referralPathOnTheAppHostIsNotTranslated() {
+        // The app host owns its own routes; only the apex is remapped.
+        #expect(DeepLinkService.appPath(from: URL(string: "https://app.capital-wizard.com/r/STAN-8F2K")!)
+                == "/r/STAN-8F2K")
+    }
+
     @Test func rejectsForeignHost() {
         #expect(DeepLinkService.appPath(from: URL(string: "https://evil.example.com/join/abc")!) == nil)
     }

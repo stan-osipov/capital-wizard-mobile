@@ -26,6 +26,11 @@ class DeepLinkService: Service {
 
     /// Host claimed by the associated-domains entitlement.
     static let linkHost = "app.capital-wizard.com"
+    /// The marketing apex, claimed for referral links ONLY. Its association
+    /// file allow-lists `/r/*`, so nothing else on that domain reaches us.
+    static let referralHost = "capital-wizard.com"
+    /// Web route a referral code lands on. The register screen reads `ref`.
+    static let referralRoute = "/auth/register"
     /// Custom scheme registered in Info.plist (`CFBundleURLSchemes`).
     static let customScheme = "capital-wizard-ios"
     /// Custom-scheme host reserved for routing. `auth` belongs to AuthService.
@@ -91,8 +96,18 @@ class DeepLinkService: Service {
         let scheme = url.scheme?.lowercased()
 
         if scheme == "https" || scheme == "http" {
-            guard url.host?.lowercased() == linkHost else { return nil }
-            return normalized(path: url.path, query: url.query, fragment: url.fragment)
+            let host = url.host?.lowercased()
+            if host == linkHost {
+                return normalized(path: url.path, query: url.query, fragment: url.fragment)
+            }
+            // The apex is claimed for one thing only, so it is TRANSLATED rather
+            // than passed through: `capital-wizard.com/r/STAN-8F2K` is a page on
+            // the marketing site, and the app has no such route. It becomes the
+            // sign-up screen with the code attached.
+            if host == referralHost, let code = referralCode(fromPath: url.path) {
+                return "\(referralRoute)?ref=\(code)"
+            }
+            return nil
         }
 
         if scheme == customScheme {
@@ -110,6 +125,19 @@ class DeepLinkService: Service {
         }
 
         return nil
+    }
+
+    /// The code out of `/r/<CODE>`, upper-cased, or `nil` when the path is not
+    /// a referral link. The alphabet matches the database's own check
+    /// constraint — anything else is not a code we could resolve anyway.
+    static func referralCode(fromPath path: String) -> String? {
+        let parts = path.split(separator: "/", omittingEmptySubsequences: true)
+        guard parts.count == 2, parts[0].lowercased() == "r" else { return nil }
+        let code = parts[1].uppercased()
+        guard code.count >= 3, code.count <= 32,
+              code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }),
+              let first = code.first, first != "-" else { return nil }
+        return code
     }
 
     /// Validates and reassembles a route. Rejects anything not rooted at `/`, and

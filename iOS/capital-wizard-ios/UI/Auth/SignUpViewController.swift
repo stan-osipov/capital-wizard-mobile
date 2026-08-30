@@ -35,6 +35,10 @@ class SignUpViewController: UIViewController {
     private let emailField = ValidatedTextField(placeholder: "you@example.com")
     private let passwordField = ValidatedTextField(placeholder: "••••••••", isSecure: true, showPasswordToggle: true)
     private let confirmPasswordField = ValidatedTextField(placeholder: "••••••••", isSecure: true, showPasswordToggle: true)
+    // Optional, and the reason this screen leads on a fresh install: a referral
+    // code may have arrived through a link, or crossed the App Store on the
+    // clipboard, and Create Account is the only place a person expects to see it.
+    private let referralField = ValidatedTextField(placeholder: "ABCD-1234")
     private let termsCheckbox = TermsCheckbox()
     private let createButton = SolidButton()
     private let googleButton = SocialButton(provider: .google, title: L("social.google"))
@@ -52,12 +56,54 @@ class SignUpViewController: UIViewController {
     private let passwordLabel = UILabel()
     private let confirmLabel = UILabel()
     private let passwordHint = UILabel()
+    private let referralLabel = UILabel()
+    private let referralHint = UILabel()
+    /// Paste button — the WORD, inside the referral field, on the password
+    /// toggle's geometry. Android is the same control in the same place (the
+    /// `TextInputLayout` suffix), so the two screens read as translations of
+    /// each other down to the tap target.
+    ///
+    /// Inside rather than above the label: the control acts on the box, and one
+    /// floating over the label read as a second thing to do.
+    ///
+    /// A word rather than a glyph, and that is the whole point of it being ours.
+    /// `LocalizationManager` is a private bundle lookup behind `L()`, wired to
+    /// the locale pill ten points up this same screen, and it resolves to
+    /// Ukrainian for a UA-region phone whose system language is English — so
+    /// anything the SYSTEM labels is in the wrong language in the ordinary case,
+    /// not the edge one. Only a string we own follows the pill. A glyph dodged
+    /// that by saying nothing at all, which also left the hint under the field
+    /// with nothing to name: it had to say "tap the paste icon", which is what
+    /// you write when the button has no name.
+    ///
+    /// A plain button and not a `UIPasteControl`, and the cost is known rather
+    /// than overlooked. The system control pastes with no alert, where reading
+    /// `UIPasteboard` ourselves raises a modal whose PROMINENT button is *Don't
+    /// Allow Paste* — checked on the simulator, not assumed — standing in front
+    /// of the one action that decides whether a referral is credited. It cannot
+    /// live here anyway: it ignores a `.clear` `baseBackgroundColor`, falling
+    /// back to its own filled capsule, and with no intrinsic width to pin it
+    /// against it stretched across the field. If the alert ever proves to cost
+    /// signups, the way back is this same button opening the system EDIT MENU on
+    /// the focused field — a paste picked there is user-initiated and prompts
+    /// nothing — which keeps every pixel of this design and changes only the
+    /// handler.
+    private let referralPaste = UIButton(type: .system)
     private let termsText = UILabel()
     private let haveAccountLabel = UILabel()
     private let dividerLabel = UILabel()
     private var dividerLines: [UIView] = []
 
     private var termsAccepted = false
+    /// Set the moment the person types in the referral box. From then on a code
+    /// the device turns up later is dropped rather than written over theirs.
+    private var referralTouched = false
+    /// Held rather than made inline: `Event` unsubscribes by identity, so a
+    /// fresh closure in `deinit` would remove nothing and leave this controller
+    /// on the service's listener list for the life of the process.
+    private lazy var onReferralCallback = EventCallback<String> { [weak self] code in
+        DispatchQueue.main.async { self?.fillReferral(code) }
+    }
     private var activeTextField: UIView?
     private var formBottomConstraint: NSLayoutConstraint?
     private var confirmBottomConstraint: NSLayoutConstraint?
@@ -67,6 +113,8 @@ class SignUpViewController: UIViewController {
         setupUI()
         setupValidation()
         setupKeyboardObservers()
+        applyReferralPrefill()
+        observeLateReferral()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -77,6 +125,8 @@ class SignUpViewController: UIViewController {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        let deepLinkService: DeepLinkService? = ServiceManager.shared.getService()
+        deepLinkService?.onReferralCode -= onReferralCallback
     }
 
     private func setupUI() {
@@ -133,6 +183,31 @@ class SignUpViewController: UIViewController {
         passwordHint.font = .systemFont(ofSize: 12)
         passwordHint.textColor = colors.dsTextSubtle
 
+        configureLabel(referralLabel, text: L("signup.referral_label"))
+        // Capitals from the keyboard rather than rewriting the text under the
+        // caret on every keystroke — codes are stored upper-case, and a field
+        // that re-assigns its own value mid-edit jumps the cursor.
+        referralField.textField.autocapitalizationType = .allCharacters
+        referralField.textField.returnKeyType = .done
+        referralHint.text = L("signup.referral_hint")
+        referralHint.font = .systemFont(ofSize: 12)
+        referralHint.textColor = colors.dsTextSubtle
+        referralHint.numberOfLines = 0
+
+        // The word, INSIDE the field, on the password toggle's own geometry. No
+        // fixed width — the word is a different length in every language, and a
+        // pinned one would clip «Вставити» to fit "Paste". REQUIRED hugging is
+        // what stands in for that width: the accessory slot hands its slack to
+        // whatever sits in it, so a control that does not hug its own title
+        // grows across the value it sits beside.
+        referralPaste.setTitle(L("signup.referral_paste"), for: .normal)
+        referralPaste.setTitleColor(colors.dsAccent, for: .normal)
+        referralPaste.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        referralPaste.setContentHuggingPriority(.required, for: .horizontal)
+        referralPaste.setContentCompressionResistancePriority(.required, for: .horizontal)
+        referralPaste.addTarget(self, action: #selector(pasteReferralTapped), for: .touchUpInside)
+        referralField.setTrailingAccessory(referralPaste)
+
         // Terms checkbox (design system) — gates the primary button.
         termsCheckbox.addTarget(self, action: #selector(toggleTerms), for: .valueChanged)
         termsCheckbox.setContentHuggingPriority(.required, for: .horizontal)
@@ -178,7 +253,8 @@ class SignUpViewController: UIViewController {
         setupConfirmationView()
 
         [titleLabel, subtitleLabel, emailLabel, emailField, passwordLabel, passwordField,
-         passwordHint, confirmLabel, confirmPasswordField, termsStack, createButton,
+         passwordHint, confirmLabel, confirmPasswordField, referralLabel, referralField,
+         referralHint, termsStack, createButton,
          dividerStack, googleButton, appleButton, loginStack, confirmationView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             cardView.addSubview($0)
@@ -250,7 +326,18 @@ class SignUpViewController: UIViewController {
             confirmPasswordField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             confirmPasswordField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
-            termsStack.topAnchor.constraint(equalTo: confirmPasswordField.bottomAnchor, constant: 14),
+            referralLabel.topAnchor.constraint(equalTo: confirmPasswordField.bottomAnchor, constant: 14),
+            referralLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+
+            referralField.topAnchor.constraint(equalTo: referralLabel.bottomAnchor, constant: 6),
+            referralField.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            referralField.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+
+            referralHint.topAnchor.constraint(equalTo: referralField.bottomAnchor, constant: 6),
+            referralHint.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            referralHint.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+
+            termsStack.topAnchor.constraint(equalTo: referralHint.bottomAnchor, constant: 14),
             termsStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             termsStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
 
@@ -302,6 +389,10 @@ class SignUpViewController: UIViewController {
         passwordLabel.text = L("field.password")
         confirmLabel.text = L("field.confirm_password")
         passwordHint.text = L("signup.password_hint")
+        referralLabel.text = L("signup.referral_label")
+        referralHint.text = L("signup.referral_hint")
+        // The glyph carries no text; its accessibility label is the only string.
+        referralPaste.setTitle(L("signup.referral_paste"), for: .normal)
         termsText.text = L("signup.terms_agree")
         createButton.setTitle(L("signup.button"), for: .normal)
         dividerLabel.text = L("auth.divider")
@@ -445,6 +536,86 @@ class SignUpViewController: UIViewController {
         emailField.onTextChanged = { [weak self] _ in self?.emailField.clearError() }
         passwordField.onTextChanged = { [weak self] _ in self?.passwordField.clearError() }
         confirmPasswordField.onTextChanged = { [weak self] _ in self?.confirmPasswordField.clearError() }
+        // `onTextChanged` fires on `.editingChanged` only, so this is the
+        // person's own typing — never our own pre-fill writing into the field.
+        referralField.onTextChanged = { [weak self] _ in
+            self?.referralTouched = true
+            self?.referralField.clearError()
+            self?.updateReferralPasteVisibility()
+        }
+        referralField.textField.delegate = self
+    }
+
+    /// Fills the box from the clipboard when the paste button is tapped.
+    ///
+    /// Read HERE, in the button's own handler, so iOS's "would like to paste
+    /// from…" alert lands on an action the person just took — never unprompted
+    /// at launch, which is the one place it must not appear at all (it fires
+    /// over the splash, before they have seen a screen of the app).
+    ///
+    /// A paste that is not a code is REFUSED rather than dropped into the field:
+    /// somebody who pasted the wrong thing needs to see that, and a box silently
+    /// left empty after a deliberate tap reads as a broken button.
+    @objc private func pasteReferralTapped() {
+        guard let code = ReferralIntake.fromPaste(UIPasteboard.general.string ?? "") else {
+            referralField.showError(L("error.referral_invalid"))
+            return
+        }
+        referralField.clearError()
+        // Pasting is as deliberate as typing, so it locks the box the same way: a
+        // code arriving from a link a second later must not replace it. Writing
+        // the field programmatically raises no `.editingChanged`, so the latch
+        // that typing sets for free has to be set by hand here.
+        referralTouched = true
+        referralField.textField.text = code
+        updateReferralPasteVisibility()
+    }
+
+    /// The paste button is for an EMPTY box. Once there is a code in there,
+    /// offering to replace it is offering to undo what just happened.
+    private func updateReferralPasteVisibility() {
+        referralPaste.isHidden = !referralField.text.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Puts a code in the box if this device has one to offer.
+    ///
+    /// Runs when the screen is built rather than at launch, because the
+    /// clipboard leg of `ReferralIntake` is user-visible — iOS posts a "pasted
+    /// from Safari" banner — and this is the one screen where the answer is used.
+    private func applyReferralPrefill() {
+        let deepLinkService: DeepLinkService? = ServiceManager.shared.getService()
+        if let code = ReferralIntake.prefill(deepLinkService: deepLinkService) {
+            fillReferral(code)
+        }
+        updateReferralPasteVisibility()
+    }
+
+    /// Writes a code the device found into the box — unless the person has
+    /// started filling it in themselves, in which case theirs wins. Silent by
+    /// design: the hint under the field already says the box fills itself.
+    private func fillReferral(_ code: String) {
+        guard !referralTouched else { return }
+        referralField.clearError()
+        referralField.textField.text = code
+        updateReferralPasteVisibility()
+    }
+
+    /// A code can arrive AFTER this screen is on the table — a `/r/CODE` link
+    /// tapped while the app was already open and sitting on Create Account. The
+    /// field has to take it: this is the first launch, so nothing else in the
+    /// app will ever ask for the code again.
+    private func observeLateReferral() {
+        let deepLinkService: DeepLinkService? = ServiceManager.shared.getService()
+        deepLinkService?.onReferralCode += onReferralCallback
+    }
+
+    /// Hands whatever is in the box to the web app, whichever way the account
+    /// ends up being created — the field is editable, so what they SEND is what
+    /// has to travel, not what arrived.
+    private func stashReferralCode() {
+        guard !referralField.text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let deepLinkService: DeepLinkService? = ServiceManager.shared.getService()
+        deepLinkService?.stashReferral(code: referralField.text)
     }
 
     private func validateForm() -> Bool {
@@ -468,6 +639,15 @@ class SignUpViewController: UIViewController {
             isValid = false
         } else if !Validator.passwordsMatch(passwordField.text, confirmPasswordField.text) {
             confirmPasswordField.showError(L("error.passwords_mismatch"))
+            isValid = false
+        }
+
+        // Optional, so an empty box always passes. But a code somebody typed and
+        // got wrong must not be swallowed silently — that reads as "applied" and
+        // is only discovered when the bonus never arrives.
+        if !referralField.text.trimmingCharacters(in: .whitespaces).isEmpty,
+           ReferralIntake.normalized(referralField.text) == nil {
+            referralField.showError(L("error.referral_invalid"))
             isValid = false
         }
 
@@ -553,6 +733,7 @@ class SignUpViewController: UIViewController {
             return
         }
 
+        stashReferralCode()
         createButton.startLoading()
 
         Task {
@@ -583,6 +764,10 @@ class SignUpViewController: UIViewController {
             return
         }
 
+        // Social sign-up creates the account just as the form does, so the code
+        // has to be handed over here too.
+        stashReferralCode()
+
         Task {
             do {
                 try await authService.signInWithGoogle()
@@ -597,6 +782,10 @@ class SignUpViewController: UIViewController {
             return
         }
 
+        // Social sign-up creates the account just as the form does, so the code
+        // has to be handed over here too.
+        stashReferralCode()
+
         Task {
             do {
                 try await authService.signInWithApple()
@@ -607,7 +796,15 @@ class SignUpViewController: UIViewController {
     }
 
     @objc private func loginTapped() {
-        dismiss(animated: true)
+        // Presented from Login — go back the way we came. Rooted here instead
+        // (a first launch, where Create Account leads) there is nothing to
+        // dismiss, and a back button that does nothing strands the person on
+        // the one screen they cannot use.
+        if presentingViewController != nil {
+            dismiss(animated: true)
+        } else {
+            windowsService?.showLogin()
+        }
     }
 
     // MARK: - Keyboard Handling

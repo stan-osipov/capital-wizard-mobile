@@ -12,6 +12,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import com.capitalwizard.android.R
 import com.capitalwizard.android.utils.CWLog
@@ -139,6 +141,95 @@ class PushService {
         val ids = pendingOpenSendIds.toList()
         pendingOpenSendIds.clear()
         return ids
+    }
+
+    /**
+     * Fired when a tapped notification carried an EXTERNAL page. Subscribers
+     * that can show it call [consumePendingExternalUrl] and hand the result to
+     * [openExternal]; ignoring the event leaves it stashed, mirroring the
+     * deep-link stash.
+     */
+    val onExternalUrl = Event<Unit>()
+
+    private var pendingExternalUrl: Uri? = null
+
+    /**
+     * Stashes an external page rather than opening it on the spot.
+     *
+     * LoginActivity used to fire the ACTION_VIEW straight from its handleIntent,
+     * during onCreate — and then navigateToMain() started WebViewActivity a few
+     * milliseconds later, which came to the front and covered the browser. The
+     * tap had worked and looked like it had done nothing. Same reasoning as the
+     * route stash: hold it, and let whoever is actually on screen consume it.
+     * iOS has held this shape since the feature shipped (PushService.openExternal
+     * there) — this is the Android half catching up, not a new idea.
+     *
+     * https is re-checked even though the server enforced it: this value arrived
+     * over the network, and an ACTION_VIEW on an arbitrary scheme is a way to
+     * launch other apps.
+     */
+    fun recordExternalUrl(link: String) {
+        val parsed = runCatching { Uri.parse(link) }.getOrNull()
+        if (parsed?.scheme?.lowercase() != "https") {
+            CWLog.log("Notification carried an unusable url - ignoring", category = "Push")
+            return
+        }
+
+        CWLog.log("Notification tapped -> external ${parsed.host ?: ""}", category = "Push")
+        pendingExternalUrl = parsed
+        onExternalUrl.invoke(Unit)
+    }
+
+    /**
+     * Returns the stashed page and clears it, so a link is only ever opened
+     * once — a later app-ready must not re-open a page already shown.
+     */
+    fun consumePendingExternalUrl(): Uri? {
+        val url = pendingExternalUrl
+        pendingExternalUrl = null
+        return url
+    }
+
+    /**
+     * Shows an external page in a Custom Tab — the Android counterpart to iOS's
+     * `SFSafariViewController`. Call only once the app is actually up; see
+     * [recordExternalUrl].
+     *
+     * A plain ACTION_VIEW was the wrong shape here even though it "worked": it
+     * hands the page to a SEPARATE browser task, so there is no close button and
+     * no way back except the system Back stack. iOS presents a sheet the user
+     * dismisses to land back where they were, and this is the same thing.
+     *
+     * The toolbar takes `surface` rather than `accent`, and that is a deliberate
+     * difference from iOS, not an oversight: iOS tints the CONTROLS on a
+     * system-coloured bar (`preferredControlTintColor`), while a Custom Tab only
+     * lets us colour the BAR ITSELF. Painting that bar amber would be a much
+     * louder thing than what iOS does; the app's own surface colour reads as
+     * "still inside Capital Wizard", which is the point of the tinting. It flips
+     * light/dark on its own through values-night.
+     *
+     * Falls back to the user's browser on its own when nothing on the device
+     * supports Custom Tabs — `launchUrl` sends a plain ACTION_VIEW in that case.
+     * A hard failure is LOGGED rather than swallowed: a device with no browser at
+     * all is rare enough that silence would read as "the notification did nothing".
+     */
+    fun openExternal(context: Context, url: Uri) {
+        val colors = CustomTabColorSchemeParams.Builder()
+            .setToolbarColor(ContextCompat.getColor(context, R.color.surface))
+            .build()
+
+        val tab = CustomTabsIntent.Builder()
+            .setDefaultColorSchemeParams(colors)
+            .setShowTitle(true)
+            .setUrlBarHidingEnabled(false)
+            .build()
+
+        // Only needed when we are not launching from an Activity; from one, the
+        // tab belongs in our own task so Back returns to the app.
+        if (context !is Activity) tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        runCatching { tab.launchUrl(context, url) }
+            .onFailure { CWLog.log("Couldn't open ${url.host ?: "page"}: ${it.message}", category = "Push") }
     }
 
     /**

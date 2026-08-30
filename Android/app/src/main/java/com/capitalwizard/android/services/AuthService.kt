@@ -21,11 +21,34 @@ import kotlinx.coroutines.launch
 
 class AuthService(private val context: Context) {
 
+    companion object {
+        private const val PREFS = "cw_auth_state"
+        private const val KEY_EVER_SIGNED_IN = "ever_signed_in"
+    }
+
     val onLogin = Event<Unit>()
     val onLogout = Event<Unit>()
 
     var isLoggedIn: Boolean = false
         private set
+
+    /**
+     * Whether ANY account has ever reached a session on this device.
+     *
+     * Decides which auth screen the app roots on: somebody who has never signed
+     * in is being asked for a password they have not chosen yet, so Create
+     * Account leads until this flips. Deliberately not "is there a session" —
+     * that is cleared on sign-out, which would drop a returning user back onto
+     * the sign-up form every time they log out.
+     *
+     * Mirrors iOS `AuthService.hasEverSignedIn`, where the same flag is doing
+     * one extra job: over there the SDK keeps the session in the Keychain, which
+     * survives a delete-and-reinstall, so device state and session state disagree
+     * far more often than they do here.
+     */
+    val hasEverSignedIn: Boolean
+        get() = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_EVER_SIGNED_IN, false)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -47,7 +70,7 @@ class AuthService(private val context: Context) {
         auth.sessionStatus.onEach { status ->
             when (status) {
                 is SessionStatus.Authenticated -> {
-                    isLoggedIn = true
+                    markSignedIn()
                     onLogin.invoke(Unit)
                 }
                 is SessionStatus.NotAuthenticated -> {
@@ -59,6 +82,16 @@ class AuthService(private val context: Context) {
                 else -> { /* Initializing / LoadingFromStorage */ }
             }
         }.launchIn(scope)
+    }
+
+    /** Marks the service — and this device — as having reached a session. */
+    private fun markSignedIn() {
+        isLoggedIn = true
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_EVER_SIGNED_IN, true).apply()
+        // From here the web app owns redemption. Keeping the code would pre-fill
+        // it onto a second account created on this phone.
+        ReferralIntake.forget(context)
     }
 
     fun tryRestoreSession() {

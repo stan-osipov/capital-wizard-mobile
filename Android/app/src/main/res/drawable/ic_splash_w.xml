@@ -6,11 +6,32 @@
      Theme-aware: @color/border and @color/accent resolve from values/ (light)
      and values-night/ (dark) automatically.
 
-     MASKING CAVEAT: the Android 12+ system splash masks the animated icon to a
-     centered circular safe zone (~2/3 of the icon bounds). The raw W path spans
-     x=[13,87] y=[18,83] which would clip. Both paths are wrapped in a <group>
-     scaled 0.62 around the W's center pivot (50, 50.5) so the mark — including
-     the 6-wide round-capped stroke — sits comfortably inside the safe circle. -->
+     SIZE: the splash system draws this vector into a 288dp box, on both paths:
+       - API 31+: the icon view is starting_surface_icon_size (160dp) scaled by
+         NO_BACKGROUND_SCALE (192/160) = 192dp; an <animated-vector> is
+         Animatable, so SplashscreenIconDrawableFactory wraps it in
+         AdaptiveForegroundDrawable, which sets the drawable's bounds to 1.5x
+         the view (the adaptive-icon viewport) = 288dp.
+       - API 26-30 (androidx core-splashscreen): the compat layer-list draws it
+         at splashscreen_icon_size_no_background = 288dp.
+     Only the inner 2/3 of that box (a 192dp circle) is visible — the rest is
+     masked/clipped away.
+
+     The <group> scale is therefore what sets the W's on-screen size, and it must
+     land on the SAME 118dp mark the web preloader (.preloader__svg, a 0-100
+     viewBox at 118px) and the iOS SplashAnimationView (markSize = 118) draw, or
+     the mark jumps as the OS splash hands over to SplashWView and then to the
+     web page:
+
+         scale = 118 / 288 = 0.409722
+
+     That scales the 6-wide stroke with it (6 x 0.409722 / 100 x 288 = 7.08dp,
+     the same stroke the web gets from 6 / 100 x 118). The W then spans 87.3dp
+     of the 192dp visible circle — deliberately smaller than a stock app icon,
+     because matching the mark either side of the handoff is the point.
+
+     iOS has no counterpart to fix: its LaunchScreen storyboard is a bare
+     background colour, so SplashAnimationView is the only W it draws. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="100dp"
     android:height="100dp"
@@ -20,8 +41,8 @@
         android:name="w_group"
         android:pivotX="50"
         android:pivotY="50.5"
-        android:scaleX="0.62"
-        android:scaleY="0.62">
+        android:scaleX="0.409722"
+        android:scaleY="0.409722">
         <path
             android:name="track"
             android:pathData="M13,45 L31,83 L45,34 L63.5,66 L87,18"

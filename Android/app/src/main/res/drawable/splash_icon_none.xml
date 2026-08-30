@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A valid drawable that paints nothing, on purpose.
+     `windowSplashScreenAnimatedIcon` is a static vector resource, so it cannot
+     read the user's accent — it drew the W in a fixed amber on every launch no
+     matter what somebody chose in Appearance, and LoginActivity holds that
+     window for 1.5s while it checks the session, so it was the dominant launch
+     image rather than a flash. Omitting the attribute is not the fix: the system
+     then falls back to the LAUNCHER icon, and an EMPTY <vector> counts as
+     omitted for the same reason — that is what this file was first, and the
+     round app badge came up instead. A full-size path in a fully transparent
+     fill is a real drawable that happens to be invisible, which leaves the
+     themed background alone. The app draws the real, accent-coloured W over it
+     (see @layout/include_splash). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M0,0h108v108h-108z"
+        android:fillColor="#00000000" />
+</vector>

@@ -29,7 +29,7 @@ class CapitalWizardApp : Application() {
         ThemePrefs.apply(this)
 
         ServiceManager.register(AuthService(this))
-        ServiceManager.register(DeepLinkService())
+        ServiceManager.register(DeepLinkService(this))
         ServiceManager.register(PushService())
 
         // A referral code that came through a Play install. Fire-and-forget and

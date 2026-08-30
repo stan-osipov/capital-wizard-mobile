@@ -16,10 +16,15 @@
     <string name="signup_title">Create your account</string>
     <string name="signup_subtitle">Join thousands using our platform</string>
     <string name="signup_password_hint">At least 8 characters</string>
+    <string name="signup_referral_label">Referral code</string>
+    <string name="signup_referral_hint">Optional. Filled in for you if you arrived from an invite link — otherwise tap Paste, or type the code from the invite.</string>
+    <string name="signup_referral_paste">Paste</string>
+    <string name="hint_referral_example">ABCD-1234</string>
+    <string name="error_referral_invalid">That does not look like a referral code. Check it, or clear the box to continue without one.</string>
     <string name="signup_terms_agree">I agree to the Terms of Service and Privacy Policy</string>
     <string name="signup_button">Create Account</string>
-    <string name="signup_divider">OR SIGN UP WITH</string>
-    <string name="signup_google">Sign up with Google</string>
+    <string name="signup_divider">OR CONTINUE WITH</string>
+    <string name="signup_google">Continue with Google</string>
     <string name="signup_have_account">Already have an account?</string>
     <string name="signup_login_here">Sign in</string>
     <string name="signup_confirm_title">Check your email</string>
@@ -68,6 +73,11 @@
 
     <!-- Brand name (not translated) -->
     <string name="app_brand" translatable="false">Capital Wizard</string>
+
+    <!-- In-app launch splash. Mirrors iOS's "loader.caption"; the progress
+         lines below it are set in code (SplashStatus), exactly as they are on
+         iOS, and are English-only on both shells. -->
+    <string name="loader_caption">Crunching the numbers</string>
 
     <!-- Locale pill 2-letter codes (not translated; display codes) -->
     <string name="locale_code_en" translatable="false">EN</string>

@@ -3,9 +3,13 @@ package com.capitalwizard.android.ui
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -16,7 +20,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -32,12 +35,19 @@ import com.capitalwizard.android.utils.AppEndpoint
 import com.capitalwizard.android.utils.CWLog
 import com.capitalwizard.android.utils.EventCallback
 import com.capitalwizard.android.utils.ServiceManager
+import com.capitalwizard.android.utils.applyIdiomOrientation
 import com.capitalwizard.android.webview.WebViewBridge
 import kotlinx.coroutines.launch
 
 class WebViewActivity : AppCompatActivity() {
 
     companion object {
+        /** Full dots cycle, matching the iOS splash's `dotsInterval`. */
+        private const val DOTS_INTERVAL_MS = 1_400L
+
+        /** Caption offset above the safe area, in dp — the iOS splash's -54. */
+        private const val CAPTION_INSET_DP = 54
+
         /**
          * The web app posts to `window.webkit.messageHandlers.iosCW` (iOS) or
          * `window.androidCW` (Android). We stand the iOS-shaped path up too, so
@@ -60,7 +70,24 @@ class WebViewActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var splashView: View
+    private lateinit var splashDots: TextView
+    private lateinit var splashStatusLabel: TextView
     private lateinit var bridge: WebViewBridge
+
+    /** 4-step dots cycle ("" -> . -> .. -> ...) over 1.4s, mirroring the iOS
+     *  splash's `steps(4, end)` loop. Held so it can be stopped on reveal. */
+    private var dotsStep = 0
+    private val dotsTick = object : Runnable {
+        override fun run() {
+            dotsStep = (dotsStep + 1) % 4
+            splashDots.text = "\u00b7".repeat(dotsStep)
+            splashDots.postDelayed(this, DOTS_INTERVAL_MS / 4)
+        }
+    }
+
+    /** [CAPTION_INSET_DP] in pixels for this display. */
+    private val captionInsetPx: Int
+        get() = (CAPTION_INSET_DP * resources.displayMetrics.density).toInt()
 
     private var authService: AuthService? = null
     private var deepLinkService: DeepLinkService? = null
@@ -77,6 +104,19 @@ class WebViewActivity : AppCompatActivity() {
     /** Guards against calling recreate() more than once on this Activity instance. */
     private var recreateScheduled = false
 
+    /**
+     * The splash's 15s escape hatch, held so [revealWebView] can CANCEL it —
+     * iOS keeps the same handle for the same reason (`readyTimeoutWork`).
+     * Left uncancelled it still fired on a healthy launch: revealWebView is a
+     * no-op by then, but the caption would be overwritten with "Timeout" and
+     * the log would report a stall that never happened.
+     */
+    private val splashTimeout = Runnable {
+        CWLog.log("Preloader timeout (15s) reached — revealing WebView anyway", category = "WebView")
+        SplashStatus.post("Timeout — revealing app")
+        revealWebView()
+    }
+
     /** True once the document-start scripts are registered. When false this
      *  WebView is too old for them and the client callbacks inject instead. */
     private var documentStartInstalled = false
@@ -88,6 +128,7 @@ class WebViewActivity : AppCompatActivity() {
             // The web app is signed in and rendering, so taps stashed through a
             // cold launch can finally be reported.
             flushOpenReports()
+            openPendingExternalUrl()
         }
     }
     private val onDeepLinkCallback = EventCallback<String> { runOnUiThread { routePendingDeepLink() } }
@@ -122,6 +163,24 @@ class WebViewActivity : AppCompatActivity() {
         if (ids.isNotEmpty()) bridge.pushOpened(ids)
     }
 
+    /** A tapped notification carried an external page. Unlike a route, this does
+     *  NOT wait for the bridge — a browser is shown by the OS, not by the web
+     *  app, so there is nothing to be ready. It only has to happen once this
+     *  Activity is on screen, so the browser lands on top of us rather than
+     *  underneath. */
+    private val onExternalUrlCallback = EventCallback<Unit> {
+        runOnUiThread { openPendingExternalUrl() }
+    }
+
+    /** Opens the stashed page, if there is one. Consuming clears the stash, so a
+     *  later resume cannot re-open a page the user has already been shown — and
+     *  coming BACK from the browser is itself a resume. */
+    private fun openPendingExternalUrl() {
+        val service = pushService ?: return
+        val url = service.consumePendingExternalUrl() ?: return
+        service.openExternal(this, url)
+    }
+
     /** Back walks the WebView's history while it has any; disabled, the system
      *  takes over (backgrounding the task, with the predictive animation on 16+).
      *  Targeting SDK 36, Android 16 no longer calls a legacy onBackPressed()
@@ -135,12 +194,34 @@ class WebViewActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Arrive on a dissolve. The auth screen hands over while BOTH are
+        // showing @layout/include_splash, so the two are near-identical and a
+        // crossfade between them reads as nothing happening — where a slide
+        // showed one copy of the splash moving over another, and a hard cut
+        // exposed the few dp the two layouts differ by. On API 34+ the incoming
+        // activity has to state its own half; below that the caller's
+        // overridePendingTransition already covered it.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, R.anim.cw_fade_in, R.anim.cw_fade_out)
+        }
+        // Phone stays portrait, tablet rotates — mirrors the iOS shell's
+        // `AppDelegate.supportedInterfaceOrientationsFor`.
+        applyIdiomOrientation()
         enableEdgeToEdge()
         setContentView(R.layout.activity_webview)
         CWLog.log("WebViewActivity created", category = "WebView")
 
-        // Light status bar icons (white) for dark background
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+        // Status-bar icon contrast is deliberately NOT set here. It used to be
+        // pinned to light (white) icons "for dark background", which painted
+        // white glyphs onto the light palette's near-white #FAFAFB the moment
+        // anyone chose the light theme — an invisible status bar, and one that
+        // never moved again when the theme was switched from inside the web app.
+        // enableEdgeToEdge() above already derives it from the current night
+        // mode, and the themes state the same rule declaratively
+        // (windowLightStatusBar in values/ and values-night/), so the contrast
+        // now follows the theme on its own — including across the recreate that
+        // AppCompat performs when the web app reports a new mode. AuthActivity
+        // has always relied on exactly this.
 
         // Edge-to-edge insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { v, insets ->
@@ -156,13 +237,41 @@ class WebViewActivity : AppCompatActivity() {
         pushService = ServiceManager.getService<PushService>()
         pushService?.onRegistration?.subscribe(onPushRegistrationCallback)
         pushService?.onOpenRecorded?.subscribe(onOpenRecordedCallback)
+        pushService?.onExternalUrl?.subscribe(onExternalUrlCallback)
 
         bridge = WebViewBridge()
         bridge.onAppReady += onAppReadyCallback
         bridge.onEndpointChanged += onEndpointChangedCallback
 
         splashView = findViewById(R.id.splash_view)
+        splashStatusLabel = findViewById(R.id.splash_status)
+        splashDots = findViewById(R.id.splash_dots)
         webView = findViewById(R.id.web_view)
+
+        // The caption is driven from the boot steps themselves (SplashStatus),
+        // the way the iOS splash is. Reduced motion gets a static ellipsis
+        // instead of the cycle — same rule the iOS splash applies.
+        // The caption is pinned 54dp off the bottom, which iOS measures from the
+        // SAFE AREA — so without the inset the line sits under the gesture bar.
+        // Only the caption moves: the mark stays centred on the full screen (iOS
+        // centres it on the view, not the safe area), and the WebView keeps its
+        // edge-to-edge bounds because the web app does its own
+        // `env(safe-area-inset-*)` handling.
+        ViewCompat.setOnApplyWindowInsetsListener(splashStatusLabel) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            (v.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                lp.bottomMargin = captionInsetPx + bars.bottom
+                v.layoutParams = lp
+            }
+            insets
+        }
+
+        SplashStatus.bind { text -> splashStatusLabel.text = text }
+        if (animationsDisabled()) {
+            splashDots.text = "\u2026"
+        } else {
+            splashDots.postDelayed(dotsTick, DOTS_INTERVAL_MS / 4)
+        }
 
         onBackPressedDispatcher.addCallback(this, webBackCallback)
 
@@ -170,11 +279,12 @@ class WebViewActivity : AppCompatActivity() {
         loadApp()
 
         // Timeout fallback for splash
-        splashView.postDelayed({ revealWebView() }, 15_000)
+        splashView.postDelayed(splashTimeout, 15_000)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
+        SplashStatus.post("Creating browser…")
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -221,6 +331,7 @@ class WebViewActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 CWLog.log("Page finished loading", category = "WebView")
+                SplashStatus.post("Waiting for app ready…")
 
                 // Belt and braces on the fallback path: the web app reads
                 // `__capital_wizard_native` at module scope, and losing that race
@@ -330,6 +441,7 @@ class WebViewActivity : AppCompatActivity() {
 
     private fun loadApp() {
         lifecycleScope.launch {
+            SplashStatus.post("Preparing auth…")
             val accessToken = authService?.getAccessToken()
             val refreshToken = authService?.getRefreshToken()
 
@@ -339,6 +451,7 @@ class WebViewActivity : AppCompatActivity() {
             installDocumentStartScripts(accessToken, refreshToken)
 
             val startUrl = buildStartUrl()
+            SplashStatus.post("Loading app…")
             CWLog.log("Loading URL: $startUrl (auth=${accessToken != null})", category = "WebView")
             webView.loadUrl(startUrl)
 
@@ -383,24 +496,32 @@ class WebViewActivity : AppCompatActivity() {
     private fun revealWebView() {
         if (splashView.visibility != View.VISIBLE) return
 
+        // The caption has nothing left to say, and a step reported now would
+        // land on a view that is fading out. Clearing `current` also stops the
+        // next launch from opening on the last run's final step.
+        splashView.removeCallbacks(splashTimeout)
+        splashDots.removeCallbacks(dotsTick)
+        SplashStatus.bind(null)
+        SplashStatus.reset()
+
+        // A pure CROSSFADE. This used to scale the splash up to 1.08 while the
+        // WebView came in from 0.96 — two simultaneous size changes, which is
+        // what read as the mark jumping just before the app appeared. Nothing
+        // moves or resizes now; the splash simply becomes the app.
+        //
+        // The web content fades in over the SAME window rather than after it,
+        // so there is no moment showing neither.
         webView.alpha = 0f
-        webView.scaleX = 0.96f
-        webView.scaleY = 0.96f
 
         splashView.animate()
             .alpha(0f)
-            .scaleX(1.08f)
-            .scaleY(1.08f)
-            .setDuration(500)
+            .setDuration(320)
             .withEndAction { splashView.visibility = View.GONE }
             .start()
 
         webView.animate()
             .alpha(1f)
-            .scaleX(1f)
-            .scaleY(1f)
-            .setStartDelay(100)
-            .setDuration(450)
+            .setDuration(320)
             .start()
     }
 
@@ -439,6 +560,13 @@ class WebViewActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+
+        // Backstop for a tap that stashed a page while we were coming up and
+        // whose event nobody was subscribed for yet. One-shot, so this is a
+        // no-op on every ordinary resume — including the one that fires when
+        // the user returns FROM the browser we opened.
+        openPendingExternalUrl()
+
         // Only react to a real return from the background (onStop fired) — ignore
         // transient pauses (e.g. permission dialogs) where onStop never happened.
         if (!didBackground) return
@@ -548,12 +676,26 @@ class WebViewActivity : AppCompatActivity() {
         pushService?.onPermissionResult(this, granted)
     }
 
+    /**
+     * Whether the device has animations switched off (Developer options, or the
+     * accessibility "remove animations" setting). The iOS splash reads
+     * `UIAccessibility.isReduceMotionEnabled` for the same purpose; Android
+     * expresses the preference as an animator duration scale of 0.
+     */
+    private fun animationsDisabled(): Boolean =
+        Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+
     override fun onDestroy() {
         super.onDestroy()
+        splashView.removeCallbacks(splashTimeout)
+        splashDots.removeCallbacks(dotsTick)
+        // The listener closes over a view, and therefore over this Activity.
+        SplashStatus.bind(null)
         authService?.onLogout?.unsubscribe(onLogoutCallback)
         deepLinkService?.onDeepLink?.unsubscribe(onDeepLinkCallback)
         pushService?.onRegistration?.unsubscribe(onPushRegistrationCallback)
         pushService?.onOpenRecorded?.unsubscribe(onOpenRecordedCallback)
+        pushService?.onExternalUrl?.unsubscribe(onExternalUrlCallback)
         bridge.onAppReady -= onAppReadyCallback
         bridge.webView = null
         webView.destroy()

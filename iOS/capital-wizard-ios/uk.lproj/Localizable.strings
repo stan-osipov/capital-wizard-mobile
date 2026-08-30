@@ -13,6 +13,10 @@
 "signup.title" = "Створіть обліковий запис";
 "signup.subtitle" = "Приєднуйтесь до тисяч користувачів";
 "signup.password_hint" = "Мінімум 8 символів";
+"signup.referral_label" = "Реферальний код";
+"signup.referral_hint" = "Необов’язково. Заповнюється автоматично, якщо ви перейшли за запрошенням — інакше натисніть «Вставити» або введіть код із запрошення.";
+"signup.referral_paste" = "Вставити";
+"error.referral_invalid" = "Це не схоже на реферальний код. Перевірте його або очистіть поле, щоб продовжити без нього.";
 "signup.terms_agree" = "Я погоджуюсь з Умовами використання та Політикою конфіденційності";
 "signup.button" = "Створити обліковий запис";
 "signup.divider" = "Або зареєструватись через";
@@ -33,8 +37,8 @@
 "reset.success_description" = "Ми надіслали посилання для скидання пароля на вашу електронну пошту.";
 
 /* Shared Social Buttons (design system) */
-"social.google" = "Продовжити через Google";
-"social.apple" = "Продовжити через Apple";
+"social.google" = "Продовжити з Google";
+"social.apple" = "Продовжити з Apple";
 "auth.divider" = "АБО ПРОДОВЖИТИ ЧЕРЕЗ";
 
 /* Shared Fields */

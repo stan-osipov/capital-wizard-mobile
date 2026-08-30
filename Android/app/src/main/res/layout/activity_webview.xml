@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -14,12 +15,20 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Splash overlay: in-app "Line Draw" W, drawn in the user's accent (the OS
-         system splash W can't read a per-user accent). Bridges to the WebView. -->
-    <com.capitalwizard.android.ui.SplashWView
+    <!-- Splash overlay: the "Line Draw" W in the user's accent, the wordmark,
+         and a status caption — the same three things the iOS
+         SplashAnimationView draws, laid out to the same numbers. The OS system
+         splash cannot read a per-user accent (it is a static vector resource),
+         so this is the surface that actually reacts to the preference; it also
+         covers the long silence while the WebView boots.
+
+         WebViewActivity animates THIS view as one group on reveal, which is why
+         the mark, wordmark and caption are children of it rather than siblings
+         of the WebView. -->
+    <include
         android:id="@+id/splash_view"
+        layout="@layout/include_splash"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/background" />
+        android:layout_height="match_parent" />
 
 </FrameLayout>

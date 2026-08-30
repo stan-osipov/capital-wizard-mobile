@@ -13,6 +13,10 @@
 "signup.title" = "Create your account";
 "signup.subtitle" = "Join thousands using our platform";
 "signup.password_hint" = "At least 8 characters";
+"signup.referral_label" = "Referral code";
+"signup.referral_hint" = "Optional. Filled in for you if you arrived from an invite link — otherwise tap Paste, or type the code from the invite.";
+"signup.referral_paste" = "Paste";
+"error.referral_invalid" = "That does not look like a referral code. Check it, or clear the box to continue without one.";
 "signup.terms_agree" = "I agree to the Terms of Service and Privacy Policy";
 "signup.button" = "Create Account";
 "signup.divider" = "Or sign up with";

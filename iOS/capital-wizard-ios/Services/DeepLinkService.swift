@@ -40,7 +40,26 @@ class DeepLinkService: Service {
     /// call `consumePendingPath()`; ignoring the event leaves the path stashed.
     var onDeepLink: Event<String> = Event()
 
+    /// Fired when the code this device knows about CHANGES.
+    ///
+    /// Separate from `onDeepLink` because it answers a different question and
+    /// has a different subscriber: the sign-up screen, which is already on the
+    /// table when a `/r/CODE` link is tapped and must put the code in its box.
+    /// A pre-fill read at `viewDidLoad` cannot cover that — the screen is built
+    /// once and the code can arrive at any point afterwards.
+    var onReferralCode: Event<String> = Event()
+
     private var pendingPath: String?
+
+    /// The referral code from the last `/r/<CODE>` link, held in its OWN slot.
+    ///
+    /// Deliberately not read back out of `pendingPath`: that slot is
+    /// single-valued, so a `/join/<token>` invite or a tapped notification
+    /// arriving afterwards would erase the code — and the sign-up screen needs to
+    /// *peek* it without consuming the route the WebView still has to be sent to.
+    /// Kept rather than consumed: a person may back out of Create Account and
+    /// come back to it.
+    private(set) var pendingReferralCode: String?
 
     /// Whether a route is waiting to be shown.
     var hasPendingPath: Bool { pendingPath != nil }
@@ -51,6 +70,13 @@ class DeepLinkService: Service {
     @discardableResult
     func handle(url: URL?) -> Bool {
         guard let url = url, let path = Self.appPath(from: url) else { return false }
+
+        // Recorded alongside the route, not instead of it: the native sign-up
+        // screen shows the code, and the web app is still sent to `?ref=` so the
+        // onboarding step can redeem it.
+        if let code = Self.referralCode(from: url) {
+            noteReferral(code)
+        }
 
         CWLog.shared.log("Deep link received → \(path)", category: "DeepLink")
         pendingPath = path
@@ -77,6 +103,49 @@ class DeepLinkService: Service {
         pendingPath = path
         onDeepLink.invoke(path)
         return true
+    }
+
+    /// Records the code the person actually submitted on the sign-up screen.
+    ///
+    /// The field is editable and the pre-fill can be wrong, so what they SEND is
+    /// what has to reach the web app — not what arrived. Writes the same
+    /// `/auth/register?ref=` route a `/r/` link produces, because the redemption
+    /// path downstream is the same one: the WebView is built after sign-in,
+    /// loads that route, and the onboarding step redeems the code from it.
+    ///
+    /// Refuses to overwrite a pending route that is NOT a referral route — an
+    /// invite link the person also tapped is a destination, and this is only a
+    /// parameter.
+    @discardableResult
+    func stashReferral(code raw: String) -> Bool {
+        guard let code = ReferralIntake.normalized(raw) else { return false }
+
+        noteReferral(code)
+        if pendingPath == nil || pendingPath?.hasPrefix(Self.referralRoute) == true {
+            pendingPath = "\(Self.referralRoute)?ref=\(code)"
+        }
+        CWLog.shared.log("Referral code stashed for the web app → \(code)", category: "Referral")
+        return true
+    }
+
+    /// Records a code and announces it. Announced only when it is NEW: this is
+    /// also reached from the sign-up screen handing back what somebody typed, and
+    /// an event echoing a value straight back at the field it came from is a
+    /// loop waiting for its first bug.
+    private func noteReferral(_ code: String) {
+        let changed = code != pendingReferralCode
+        pendingReferralCode = code
+        ReferralIntake.remember(code)
+        if changed { onReferralCode.invoke(code) }
+    }
+
+    /// The referral code carried by `url`, or `nil`. Host-checked as well as
+    /// path-checked, so only the apex we claim for `/r/*` can set one.
+    static func referralCode(from url: URL) -> String? {
+        let scheme = url.scheme?.lowercased()
+        guard scheme == "https" || scheme == "http",
+              url.host?.lowercased() == referralHost else { return nil }
+        return referralCode(fromPath: url.path)
     }
 
     /// Returns the stashed route and clears it, so a link is only ever applied

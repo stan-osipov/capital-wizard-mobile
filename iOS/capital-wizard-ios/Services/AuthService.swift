@@ -20,6 +20,23 @@ class AuthService: NSObject, Service {
 
     private(set) var isLoggedIn: Bool = false
 
+    /// Key behind `hasEverSignedIn`. In `UserDefaults`, which lives in the app
+    /// container and therefore really is wiped when the app is deleted — unlike
+    /// the Keychain `KeychainLocalStorage` keeps the session in, which survives
+    /// a delete-and-reinstall and makes a "fresh" install look like a warm one.
+    private static let everSignedInKey = "cw.auth.everSignedIn"
+
+    /// Whether ANY account has ever reached a session on this device.
+    ///
+    /// Decides which auth screen the app roots on: somebody who has never signed
+    /// in is being asked for a password they have not chosen yet, so Create
+    /// Account leads until this flips. Deliberately not "is there a session" —
+    /// that is cleared on sign-out, which would drop a returning user back onto
+    /// the sign-up form every time they log out.
+    static var hasEverSignedIn: Bool {
+        UserDefaults.standard.bool(forKey: everSignedInKey)
+    }
+
     private static let redirectURL = URL(string: "capital-wizard-ios://auth/callback")!
 
     private var appleSignInContinuation: CheckedContinuation<Void, Error>?
@@ -43,7 +60,7 @@ class AuthService: NSObject, Service {
                 session = try await client.session
                 SplashAnimationView.postStatus("Verifying account…")
                 _ = try await client.user()
-                isLoggedIn = true
+                markSignedIn()
                 SplashAnimationView.postStatus("Session restored")
                 await MainActor.run {
                     onLogin.invoke(())
@@ -63,9 +80,18 @@ class AuthService: NSObject, Service {
         }
     }
 
+    /// Marks the service — and this device — as having reached a session.
+    private func markSignedIn() {
+        isLoggedIn = true
+        UserDefaults.standard.set(true, forKey: Self.everSignedInKey)
+        // From here the web app owns redemption. Keeping the code would pre-fill
+        // it onto a second account created on this phone.
+        ReferralIntake.forget()
+    }
+
     func signIn(email: String, password: String) async throws {
         session = try await client.signIn(email: email, password: password)
-        isLoggedIn = true
+        markSignedIn()
         await MainActor.run {
             onLogin.invoke(())
         }
@@ -76,7 +102,7 @@ class AuthService: NSObject, Service {
         let response = try await client.signUp(email: email, password: password)
         session = response.session
         if session != nil {
-            isLoggedIn = true
+            markSignedIn()
             await MainActor.run {
                 onLogin.invoke(())
             }
@@ -91,7 +117,7 @@ class AuthService: NSObject, Service {
             redirectTo: AuthService.redirectURL,
             queryParams: [("prompt", "select_account")]
         )
-        isLoggedIn = true
+        markSignedIn()
         await MainActor.run {
             onLogin.invoke(())
         }
@@ -140,7 +166,7 @@ class AuthService: NSObject, Service {
         Task(priority: .high) {
             do {
                 session = try await client.session(from: url)
-                isLoggedIn = true
+                markSignedIn()
                 await MainActor.run {
                     onLogin.invoke(())
                 }
@@ -166,7 +192,7 @@ extension AuthService: ASAuthorizationControllerDelegate {
         Task {
             do {
                 session = try await client.signInWithIdToken(credentials: .init(provider: .apple, idToken: idToken))
-                isLoggedIn = true
+                markSignedIn()
                 await MainActor.run {
                     onLogin.invoke(())
                 }

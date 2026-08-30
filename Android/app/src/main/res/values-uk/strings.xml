@@ -8,7 +8,7 @@
     <string name="login_forgot_password">Забули пароль?</string>
     <string name="login_button">Увійти</string>
     <string name="login_divider">АБО ПРОДОВЖИТИ ЧЕРЕЗ</string>
-    <string name="login_google">Увійти через Google</string>
+    <string name="login_google">Продовжити з Google</string>
     <string name="login_no_account">Немає облікового запису?</string>
     <string name="login_create_one">Створити</string>
 
@@ -16,10 +16,15 @@
     <string name="signup_title">Створіть обліковий запис</string>
     <string name="signup_subtitle">Приєднуйтесь до тисяч користувачів</string>
     <string name="signup_password_hint">Мінімум 8 символів</string>
+    <string name="signup_referral_label">Реферальний код</string>
+    <string name="signup_referral_hint">Необов’язково. Заповнюється автоматично, якщо ви перейшли за запрошенням — інакше натисніть «Вставити» або введіть код із запрошення.</string>
+    <string name="signup_referral_paste">Вставити</string>
+    <string name="hint_referral_example">ABCD-1234</string>
+    <string name="error_referral_invalid">Це не схоже на реферальний код. Перевірте його або очистіть поле, щоб продовжити без нього.</string>
     <string name="signup_terms_agree">Я погоджуюсь з Умовами використання та Політикою конфіденційності</string>
     <string name="signup_button">Створити обліковий запис</string>
-    <string name="signup_divider">АБО ЗАРЕЄСТРУВАТИСЬ ЧЕРЕЗ</string>
-    <string name="signup_google">Зареєструватись через Google</string>
+    <string name="signup_divider">АБО ПРОДОВЖИТИ ЧЕРЕЗ</string>
+    <string name="signup_google">Продовжити з Google</string>
     <string name="signup_have_account">Вже маєте обліковий запис?</string>
     <string name="signup_login_here">Увійти</string>
     <string name="signup_confirm_title">Перевірте пошту</string>
@@ -69,4 +74,8 @@
     <!-- Notification channel shown in the system settings list -->
     <string name="push_channel_name">Загальні</string>
     <string name="push_channel_description">Нагадування та оновлення від Capital Wizard</string>
+
+    <!-- In-app launch splash (mirrors iOS "loader.caption"). -->
+    <string name="loader_caption">Обчислюємо ваші дані</string>
+
 </resources>

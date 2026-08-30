@@ -32,3 +32,8 @@ mapping.txt
 # OS
 .DS_Store
 Thumbs.db
+# Firebase — app/build.gradle.kts applies the google-services plugin only when
+# this file is present, so a checkout without it still builds (just with no push
+# token). Keep it out of source control: it names the Firebase project this
+# build reports to, and a fork picking it up would register devices into ours.
+app/google-services.json

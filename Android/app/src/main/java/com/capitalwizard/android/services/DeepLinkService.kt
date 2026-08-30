@@ -1,5 +1,6 @@
 package com.capitalwizard.android.services
 
+import android.content.Context
 import android.net.Uri
 import com.capitalwizard.android.utils.CWLog
 import com.capitalwizard.android.utils.Event
@@ -21,7 +22,7 @@ import com.capitalwizard.android.utils.Event
  * the WebView may not exist yet. So the path is *stashed* rather than delivered,
  * and whoever becomes ready first consumes it.
  */
-class DeepLinkService {
+class DeepLinkService(private val context: Context) {
 
     companion object {
         /** Host declared in the app-link intent filter. */
@@ -115,7 +116,33 @@ class DeepLinkService {
      */
     val onDeepLink = Event<String>()
 
+    /**
+     * Fired when the code this device knows about CHANGES.
+     *
+     * Separate from [onDeepLink] because it answers a different question and has
+     * a different subscriber: the sign-up screen, which on this platform is
+     * routinely built BEFORE the code exists — [InstallReferrerService] asks Play
+     * on a background connection and answers a moment later. A pre-fill read in
+     * `onCreate` cannot cover that, and this is a first launch, so nothing else
+     * in the app will ever ask for the code again.
+     */
+    val onReferralCode = Event<String>()
+
     private var pendingPath: String? = null
+
+    /**
+     * The referral code from the last `/r/<CODE>` link (or Play install
+     * referrer), held in its OWN slot.
+     *
+     * Deliberately not read back out of [pendingPath]: that slot is
+     * single-valued, so a `/join/<token>` invite or a tapped notification
+     * arriving afterwards would erase the code — and the sign-up screen needs to
+     * *peek* it without consuming the route the WebView still has to be sent to.
+     * Kept rather than consumed: a person may back out of Create Account and
+     * come back to it.
+     */
+    var pendingReferralCode: String? = null
+        private set
 
     /** Whether a route is waiting to be shown. */
     val hasPendingPath: Boolean get() = pendingPath != null
@@ -127,6 +154,11 @@ class DeepLinkService {
      */
     fun handle(uri: Uri?): Boolean {
         val path = uri?.let { appPath(it) } ?: return false
+
+        // Recorded alongside the route, not instead of it: the native sign-up
+        // screen shows the code, and the web app is still sent to `?ref=` so the
+        // onboarding step can redeem it.
+        referralCode(uri)?.let { noteReferral(it) }
 
         CWLog.log("Deep link received → $path", category = "DeepLink")
         pendingPath = path
@@ -150,6 +182,57 @@ class DeepLinkService {
         pendingPath = path
         onDeepLink.invoke(path)
         return true
+    }
+
+    /**
+     * Records a code and announces it. Announced only when it is NEW: this is
+     * also reached from the sign-up screen handing back what somebody typed, and
+     * an event echoing a value straight back at the field it came from is a loop
+     * waiting for its first bug.
+     */
+    private fun noteReferral(code: String) {
+        val changed = code != pendingReferralCode
+        pendingReferralCode = code
+        ReferralIntake.remember(context, code)
+        if (changed) onReferralCode.invoke(code)
+    }
+
+    /**
+     * Records the code the person actually submitted on the sign-up screen — or
+     * the one the Play install referrer carried.
+     *
+     * The field is editable and the pre-fill can be wrong, so what they SEND is
+     * what has to reach the web app, not what arrived. Writes the same
+     * `/auth/register?ref=` route a `/r/` link produces, because the redemption
+     * path downstream is the same one: the WebView is built after sign-in, loads
+     * that route, and the onboarding step redeems the code from it.
+     *
+     * Refuses to overwrite a pending route that is NOT a referral route — an
+     * invite link the person also tapped is a destination, and this is only a
+     * parameter.
+     */
+    fun stashReferral(raw: String): Boolean {
+        val code = ReferralIntake.normalized(raw) ?: return false
+
+        noteReferral(code)
+        val current = pendingPath
+        if (current == null || current.startsWith(REFERRAL_ROUTE)) {
+            pendingPath = "$REFERRAL_ROUTE?ref=$code"
+        }
+        CWLog.log("Referral code stashed for the web app → $code", category = "Referral")
+        return true
+    }
+
+    /**
+     * The referral code carried by [uri], or `null`. Host-checked as well as
+     * path-checked, so only the marketing apex we claim for referral links can
+     * set one.
+     */
+    private fun referralCode(uri: Uri): String? {
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "https" && scheme != "http") return null
+        if (uri.host?.lowercase() != REFERRAL_HOST) return null
+        return referralCode(uri.path)
     }
 
     /**

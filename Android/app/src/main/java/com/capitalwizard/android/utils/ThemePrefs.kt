@@ -1,6 +1,8 @@
 package com.capitalwizard.android.utils
 
+import android.app.UiModeManager
 import android.content.Context
+import android.os.Build
 import androidx.appcompat.app.AppCompatDelegate
 
 /**
@@ -47,13 +49,13 @@ object ThemePrefs {
 
     /** Apply the stored preference to the AppCompat night-mode delegate. */
     fun apply(context: Context) {
-        applyMode(get(context))
+        applyMode(context, get(context))
     }
 
     /** Persist a new preference and apply it immediately. */
     fun set(context: Context, mode: String) {
         prefs(context).edit().putString(KEY_THEME, mode).apply()
-        applyMode(mode)
+        applyMode(context, mode)
     }
 
     /** The exact web `mode` string last seen from the WebView, or null if none. */
@@ -96,12 +98,48 @@ object ThemePrefs {
         }
     }
 
-    private fun applyMode(mode: String) {
+    private fun applyMode(context: Context, mode: String) {
         val nightMode = when (mode) {
             LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
             DARK -> AppCompatDelegate.MODE_NIGHT_YES
             else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
         }
         AppCompatDelegate.setDefaultNightMode(nightMode)
+        applySystemNightMode(context, mode)
+    }
+
+    /**
+     * Tells the PLATFORM which theme this app runs in, so the OS splash matches.
+     *
+     * [AppCompatDelegate.setDefaultNightMode] is in-process only. The system
+     * splash is not: Android draws that window from `Theme.CapitalWizard.Splash`
+     * BEFORE this process is forked, so it resolved `@color/background` against
+     * the phone's own night mode and ignored the app's setting entirely. Choose
+     * dark in the app on a light phone and every launch opened on a white screen
+     * — which is exactly what it looked like, a theme that did not stick.
+     *
+     * `UiModeManager.setApplicationNightMode` exists for this and nothing else:
+     * it records the app's night mode with the system, which then uses it for
+     * this app's starting window. API 31+; below that the OS has no way to know
+     * and the splash keeps following the phone.
+     *
+     * `MODE_NIGHT_AUTO` is the platform's spelling of "follow the system" here.
+     *
+     * Wrapped in runCatching because this is decoration on a launch path: an OEM
+     * that refuses the call must not take the app down with it. The in-process
+     * mode above has already been applied either way.
+     */
+    private fun applySystemNightMode(context: Context, mode: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val systemMode = when (mode) {
+            LIGHT -> UiModeManager.MODE_NIGHT_NO
+            DARK -> UiModeManager.MODE_NIGHT_YES
+            else -> UiModeManager.MODE_NIGHT_AUTO
+        }
+        runCatching {
+            context.getSystemService(UiModeManager::class.java)?.setApplicationNightMode(systemMode)
+        }.onFailure {
+            CWLog.log("Couldn't tell the system our night mode: ${it.message}", category = "Theme")
+        }
     }
 }

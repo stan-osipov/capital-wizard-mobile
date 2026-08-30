@@ -20,6 +20,13 @@ class ValidatedTextField: UIView {
     private var showToggle: Bool = false
     private var isShowingError = false
 
+    /// Trailing control living INSIDE the field, on the password toggle's own
+    /// geometry — see `setTrailingAccessory`.
+    private var trailingAccessory: UIView?
+    /// Held so an accessory can re-point it; the text has to stop where the
+    /// accessory starts or the two overlap on a long value.
+    private var textFieldTrailing: NSLayoutConstraint?
+
     private lazy var windowsService: WindowsService? = ServiceManager.shared.getService()
 
     private var effectiveStyle: UIUserInterfaceStyle {
@@ -87,7 +94,8 @@ class ValidatedTextField: UIView {
                 textField.trailingAnchor.constraint(equalTo: toggleBtn.leadingAnchor, constant: -8)
             ])
         } else {
-            textField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16).isActive = true
+            textFieldTrailing = textField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16)
+            textFieldTrailing?.isActive = true
         }
 
         // Error Label
@@ -147,6 +155,41 @@ class ValidatedTextField: UIView {
         } else {
             containerView.layer.shadowOpacity = 0
         }
+    }
+
+    /// Puts a control inside the field at the trailing edge, where the password
+    /// toggle sits — same inset, same centring — and stops the text where it
+    /// begins so a long value cannot run underneath it.
+    ///
+    /// Inside rather than above: a control floating over the label reads as a
+    /// second thing to do, and the field is what it acts on.
+    ///
+    /// Pass `nil` to remove. A field already showing a password toggle keeps it;
+    /// there is one accessory slot and the toggle owns it.
+    func setTrailingAccessory(_ view: UIView?, width: CGFloat? = nil) {
+        guard !(showToggle && isSecure) else { return }
+
+        trailingAccessory?.removeFromSuperview()
+        trailingAccessory = view
+        textFieldTrailing?.isActive = false
+
+        guard let view = view else {
+            textFieldTrailing = textField.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16)
+            textFieldTrailing?.isActive = true
+            return
+        }
+
+        view.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(view)
+
+        textFieldTrailing = textField.trailingAnchor.constraint(equalTo: view.leadingAnchor, constant: -8)
+        var constraints: [NSLayoutConstraint] = [
+            view.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
+            view.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            textFieldTrailing!
+        ]
+        if let width = width { constraints.append(view.widthAnchor.constraint(equalToConstant: width)) }
+        NSLayoutConstraint.activate(constraints)
     }
 
     @objc private func togglePassword(_ sender: UIButton) {

@@ -30,11 +30,19 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/app_bar">
 
+        <!-- center_horizontal, never plain center: ScrollView lays its child
+             out as a FrameLayout, so a vertical gravity on content TALLER
+             than the viewport resolves to a negative top - those pixels sit
+             above the scroll origin and nothing can scroll back to them.
+             Sign-up lost its title and subtitle that way once the referral
+             field pushed the form past the fold. fillViewport already
+             handles the shorter-than-viewport case, so the vertical
+             centring was never doing any work here. -->
         <LinearLayout
             android:id="@+id/login_form"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
+            android:layout_gravity="center_horizontal"
             android:gravity="center_horizontal"
             android:orientation="vertical"
             android:paddingHorizontal="28dp"
@@ -201,6 +209,22 @@
         android:layout_height="wrap_content"
         android:indeterminateTint="@color/accent"
         android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- The launch splash. This activity holds the OS splash for up to 1.5s
+         while it restores the session; that window now carries only a themed
+         background, so this is what actually shows the mark — in the user's own
+         accent, which the system splash could never do. Visible from the first
+         frame and dismissed by showLoginForm()/navigateToMain(). -->
+    <include
+        android:id="@+id/splash_view"
+        layout="@layout/include_splash"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

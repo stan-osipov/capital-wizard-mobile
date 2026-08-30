@@ -473,12 +473,31 @@ class WindowsService: NSObject, Service {
             if let mainController = self.mainController {
                 mainController.dismiss(animated: false) {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.showLogin()
+                        self.showAuth()
                     }
                 }
             } else {
-                self.showLogin()
+                self.showAuth()
             }
+        }
+    }
+
+    /// Puts up the auth screen this device should START on.
+    ///
+    /// Create Account leads until an account has actually signed in here: a
+    /// freshly installed app has, by definition, no account on this device, so
+    /// the login form asks for a password nobody has chosen yet and buries the
+    /// way to register in a link at the bottom. It is also the screen that
+    /// carries the referral field, which is the whole point on a phone — the
+    /// code may have come in through a link, or crossed the App Store on the
+    /// clipboard, and there is nowhere else to show it.
+    ///
+    /// After a sign-OUT this resolves to Login, because by then the latch is set.
+    func showAuth() {
+        if AuthService.hasEverSignedIn {
+            showLogin()
+        } else {
+            window.rootViewController = SignUpViewController()
         }
     }
 

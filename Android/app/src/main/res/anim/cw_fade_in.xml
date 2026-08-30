@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch handover, incoming half. Paired with cw_fade_out.
+     The splash is handed from LoginActivity to WebViewActivity, and both draw
+     @layout/include_splash — so a hard cut only looks seamless if the two land
+     on exactly the same pixels, which they do not: the auth screen insets its
+     root for the status bar and the WebView does not. Rather than chase that
+     alignment, the two dissolve into each other; a crossfade of two near-
+     identical screens reads as nothing happening at all. -->
+<alpha xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="220"
+    android:fromAlpha="0.0"
+    android:interpolator="@android:interpolator/fast_out_slow_in"
+    android:toAlpha="1.0" />

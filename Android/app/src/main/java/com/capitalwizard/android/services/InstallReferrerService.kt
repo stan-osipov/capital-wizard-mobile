@@ -58,8 +58,9 @@ class InstallReferrerService(private val context: Context) {
         get() = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /**
-     * Ask Play for the install referrer and, if it carries a code, stash the
-     * sign-up route on [DeepLinkService] so the WebView opens there.
+     * Ask Play for the install referrer and, if it carries a code, stash it on
+     * [DeepLinkService] — both as the bare code the sign-up field shows and as
+     * the sign-up route the WebView opens on afterwards.
      *
      * Fire-and-forget: a first launch must never wait on Play, and every failure
      * mode here — no Play Store, an old Play version, a service disconnect — is
@@ -82,7 +83,10 @@ class InstallReferrerService(private val context: Context) {
                     val code = referralCode(referrer)
                     if (code != null) {
                         CWLog.log("Install referrer carried a referral code", category = "Referral")
-                        deepLinkService?.handleRoutePath("/auth/register?ref=$code")
+                        // `stashReferral` rather than `handleRoutePath`: it writes
+                        // the same route AND records the bare code, which is what
+                        // the native sign-up screen pre-fills its field from.
+                        deepLinkService?.stashReferral(code)
                     } else {
                         CWLog.log("Install referrer had no referral code", category = "Referral")
                     }

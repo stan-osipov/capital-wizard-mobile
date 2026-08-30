@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In-app launch splash ("Line Draw"), the surface between the OS system
+     splash and the first web frame. Every value here is the Android spelling of
+     a number in the iOS SplashAnimationView, so the two shells hand over to the
+     web page looking like one app:
+
+       wordmark   21pt semibold, letter-spacing -0.01em, dsText
+       caption    11.5pt monospace, dsTextSubtle
+       dots       same as the caption, in a fixed-width column so the centred
+                  status text does not shift as they cycle
+
+     Sizes are in sp rather than dp on purpose — the iOS values are points,
+     which ignore the user's text-size setting, but ignoring it is an iOS
+     limitation, not a design decision worth reproducing. -->
+<resources>
+
+    <!-- Base of the "Splash.*" family. Dot-notation names imply a parent style
+         of everything before the last dot, so the members below resolve against
+         this one; without it AAPT fails the link with "resource style/Splash not
+         found". Intentionally empty — it just anchors the family, exactly as
+         `Auth` does in styles_auth.xml. -->
+    <style name="Splash" />
+
+    <style name="Splash.Wordmark">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">21sp</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.01</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="Splash.Caption">
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">11.5sp</item>
+        <item name="android:textColor">@color/text_subtle</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+</resources>

@@ -3,6 +3,7 @@ package com.capitalwizard.android.webview
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -11,6 +12,7 @@ import com.capitalwizard.android.services.PushRegistration
 import com.capitalwizard.android.services.PushService
 import com.capitalwizard.android.utils.CWLog
 import com.capitalwizard.android.utils.AppEndpoint
+import com.capitalwizard.android.utils.DeviceIdiom
 import com.capitalwizard.android.utils.DeviceKvStore
 import com.capitalwizard.android.utils.EndpointStore
 import com.capitalwizard.android.utils.Event
@@ -111,8 +113,10 @@ class WebViewBridge {
     fun getNativeAppScript(): String {
         // `idiom` lets the web app pick its chrome: 'phone' → mobile chrome,
         // 'pad' (tablet) → desktop chrome with side-panel pinning disabled.
-        val smallestWidthDp = webView?.context?.resources?.configuration?.smallestScreenWidthDp ?: 0
-        val idiom = if (smallestWidthDp >= 600) "pad" else "phone"
+        // Read from DeviceIdiom, which also decides whether the screen may
+        // rotate — a tablet on desktop chrome pinned to portrait is what
+        // sharing the one answer prevents.
+        val idiom = webView?.context?.let { DeviceIdiom.of(it) } ?: DeviceIdiom.PHONE
         // `endpoint` names the site this WebView was pointed at, so the admin
         // header can state it rather than infer it. Read at injection time — the
         // switch restarts the Activity, so this always describes the live load.
@@ -434,7 +438,55 @@ class WebViewBridge {
             "request-push-token" -> requestPushToken()
             "request-push-status" -> reportPushStatus()
             "open-push-settings" -> openPushSettings()
+            "open-external-url" -> openExternalUrl(json.optString("url"))
             "set-endpoint" -> setEndpoint(json.optString("endpoint"))
+        }
+    }
+
+    /**
+     * Web → native: `{ type: "system", eventName: "open-external-url", url }` —
+     * open a page AWAY from the app (a map deep link, a link in a chat message).
+     *
+     * The web app posts this on Android as well as iOS, and that is not an
+     * accident of [IOS_BRIDGE_SHIM] standing `window.webkit.messageHandlers.iosCW`
+     * up: `window.open` is a dead end in this WebView anyway — multiple windows
+     * are off and `javaScriptCanOpenWindowsAutomatically` defaults to false, so a
+     * link handed to it silently does nothing. Without this branch the message
+     * fell through [parseSystemMessage] unread, and every external link in the
+     * app did nothing at all.
+     *
+     * ACTION_VIEW, deliberately NOT a Custom Tab like [PushService.openExternal].
+     * This mirrors iOS's `UIApplication.open`, which lets the OS route
+     * `maps.apple.com` to Apple Maps; a Custom Tab would render
+     * `google.com/maps` as a web page instead of handing it to the Maps app,
+     * which is the entire point of the address chooser. A notification's page is
+     * the other case — there the user is reading, and a tab they can dismiss is
+     * right.
+     *
+     * Restricted to http/https, exactly as the iOS handler is: this hangs off
+     * `window`, so anything running in the page can call it, and an ACTION_VIEW
+     * on an arbitrary scheme is a way to launch other apps.
+     */
+    private fun openExternalUrl(raw: String?) {
+        val url = raw?.takeIf { it.isNotBlank() }?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        val scheme = url?.scheme?.lowercase()
+        if (url == null || (scheme != "https" && scheme != "http")) {
+            CWLog.log("Ignoring open-external-url for an unusable url", category = "Bridge")
+            return
+        }
+
+        val view = webView ?: return
+        view.post {
+            // From an Activity the page belongs in our own task, so Back returns
+            // to the app; without one it needs a task of its own.
+            var context = view.context
+            while (context is ContextWrapper && context !is Activity) {
+                context = context.baseContext
+            }
+            val intent = Intent(Intent.ACTION_VIEW, url)
+            if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { (context ?: return@post).startActivity(intent) }
+                .onFailure { CWLog.log("Couldn't open ${url.host ?: "page"}: ${it.message}", category = "Bridge") }
         }
     }
 

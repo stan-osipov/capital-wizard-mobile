@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
+import android.provider.Settings
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.LinearInterpolator
@@ -130,8 +131,32 @@ class SplashWView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Whether the device has animations switched off (Developer options, or the
+     * accessibility "remove animations" setting). The iOS splash reads
+     * `UIAccessibility.isReduceMotionEnabled` here; Android expresses the same
+     * preference as an animator duration scale of 0.
+     */
+    private fun animationsDisabled(): Boolean =
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+
     private fun startAnim() {
         if (animator != null) return
+
+        // Reduced motion: show the finished accent W and no draw loop, which is
+        // exactly what the iOS splash does. Drawing nothing would leave only the
+        // faint track, and the mark is the one thing on this screen.
+        if (animationsDisabled()) {
+            trim = 1f
+            lineAlpha = 255
+            invalidate()
+            return
+        }
+
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = DRAW_MS
             repeatCount = ValueAnimator.INFINITE

@@ -30,10 +30,18 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/app_bar">
 
+        <!-- center_horizontal, never plain center: ScrollView lays its child
+             out as a FrameLayout, so a vertical gravity on content TALLER
+             than the viewport resolves to a negative top - those pixels sit
+             above the scroll origin and nothing can scroll back to them.
+             Sign-up lost its title and subtitle that way once the referral
+             field pushed the form past the fold. fillViewport already
+             handles the shorter-than-viewport case, so the vertical
+             centring was never doing any work here. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
+            android:layout_gravity="center_horizontal"
             android:gravity="center_horizontal"
             android:orientation="vertical"
             android:paddingHorizontal="28dp"
@@ -113,7 +121,7 @@
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/layout_confirm_password"
                     style="@style/Auth.InputLayout"
-                    android:layout_marginBottom="16dp"
+                    android:layout_marginBottom="14dp"
                     android:hint="@string/hint_password_example"
                     app:endIconMode="password_toggle">
 
@@ -125,6 +133,60 @@
                         android:inputType="textPassword" />
 
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Referral code. Optional, and the reason this screen leads on
+                     a fresh install: the code may have come in through a link,
+                     through the Play install referrer, or on the clipboard, and
+                     this is the only place a person expects to see it. -->
+                <TextView
+                    style="@style/Auth.FieldLabel"
+                    android:text="@string/signup_referral_label" />
+
+                <!-- Paste lives INSIDE the field, on the same geometry the
+                     password toggles above use — the mirror of iOS's trailing
+                     accessory. A control floating over the label read as a
+                     second thing to do; this one clearly acts on the box it
+                     sits in.
+
+                     It is the SUFFIX slot and not an end icon, because the
+                     control is a word: `endIconDrawable` can only be a drawable,
+                     and a glyph is the one form that cannot be in the app's own
+                     language. `SignUpActivity` hangs the click on
+                     `getSuffixTextView()` and shows/hides it by setting the
+                     suffix text, which is the API that owns that visibility.
+
+                     `hintEnabled="false"` is load-bearing twice over. Material
+                     hides prefix/suffix while the hint is EXPANDED — that is,
+                     precisely while the box is empty, which is the only time
+                     Paste should be on screen — and switching the hint off
+                     leaves the suffix permanently visible for us to drive. It
+                     also makes this field behave like its iOS twin: "ABCD-1234"
+                     is a format example, not a label, and a format example that
+                     floats up to sit on the border reads as one. -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layout_referral"
+                    style="@style/Auth.InputLayout"
+                    app:hintEnabled="false"
+                    app:expandedHintEnabled="false"
+                    app:suffixText="@string/signup_referral_paste"
+                    app:suffixTextColor="@color/accent"
+                    app:suffixTextAppearance="@style/Auth.SuffixAction">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/input_referral"
+                        style="@style/Auth.InputEditText"
+                        android:hint="@string/hint_referral_example"
+                        android:textColorHint="@color/text_subtle"
+                        android:imeOptions="actionDone"
+                        android:inputType="textCapCharacters|textNoSuggestions" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    style="@style/Auth.HelperText"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="16dp"
+                    android:text="@string/signup_referral_hint" />
 
                 <!-- Terms agreement (gates the primary button) -->
                 <LinearLayout

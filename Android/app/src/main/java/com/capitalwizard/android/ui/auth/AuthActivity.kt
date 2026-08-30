@@ -2,6 +2,7 @@ package com.capitalwizard.android.ui.auth
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
@@ -13,12 +14,14 @@ import android.view.View
 import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.AnimRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.capitalwizard.android.R
 import com.capitalwizard.android.utils.LocalePrefs
+import com.capitalwizard.android.utils.applyIdiomOrientation
 import com.google.android.material.button.MaterialButton
 
 /**
@@ -32,7 +35,46 @@ abstract class AuthActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Phone stays portrait, tablet rotates — same rule the iOS auth view
+        // controllers state in `supportedInterfaceOrientations`. Set before the
+        // subclass inflates its layout, so the first frame is the right way up.
+        applyIdiomOrientation()
         enableEdgeToEdge()
+    }
+
+    /**
+     * Sets how THIS activity leaves, when it is handing over to another.
+     *
+     * `FLAG_ACTIVITY_NO_ANIMATION` on an intent governs the activity coming in;
+     * the one going out animates separately, so both halves have to be stated or
+     * the outgoing screen slides away from under the incoming one.
+     *
+     * Pass `0, 0` for no animation at all. `overrideActivityTransition` is the
+     * API 34+ replacement for `overridePendingTransition`, which is deprecated
+     * but is still the only option below it.
+     */
+    protected fun setExitTransition(@AnimRes enter: Int, @AnimRes exit: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, enter, exit)
+        } else {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(enter, exit)
+        }
+    }
+
+    /**
+     * Sets how THIS activity arrives.
+     *
+     * The other half of [setExitTransition], and on API 34+ it is a separate
+     * call that only the INCOMING activity can make — `overrideActivityTransition`
+     * applies to the activity it is called on. Below 34 the caller's
+     * `overridePendingTransition` already covers both halves, so this is a no-op
+     * there rather than a second, competing animation.
+     */
+    protected fun setEnterTransition(@AnimRes enter: Int, @AnimRes exit: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, enter, exit)
+        }
     }
 
     /** Pads [target] for the status bar / nav bar so content respects insets. */
@@ -58,14 +100,14 @@ abstract class AuthActivity : AppCompatActivity() {
 
     /** Sets the pill label to "<flag> <CODE>" for the current language. */
     private fun updateLocalePill(button: MaterialButton) {
-        val isUk = LocalePrefs.current() == LocalePrefs.UK
+        val isUk = LocalePrefs.current(this) == LocalePrefs.UK
         val code = getString(if (isUk) R.string.locale_code_uk else R.string.locale_code_en)
-        button.text = "${LocalePrefs.currentFlag()} $code"
+        button.text = "${LocalePrefs.currentFlag(this)} $code"
     }
 
     /** Shows the EN/UA picker anchored to [anchor]; selection applies the locale. */
     private fun showLocaleMenu(anchor: View) {
-        val current = LocalePrefs.current()
+        val current = LocalePrefs.current(this)
         val popup = PopupMenu(this, anchor)
         // group 0, itemId = index, order = index
         val itemEn = popup.menu.add(Menu.NONE, ID_LOCALE_EN, 0, R.string.locale_menu_en)

@@ -68,6 +68,10 @@
         <item name="android:layout_height">52dp</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">16sp</item>
+        <!-- Fixed height: keep the label on one line so a long translation
+             ellipsizes instead of being sliced by the bottom edge. -->
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:textColor">@color/btn_primary_label</item>
         <item name="backgroundTint">@color/btn_primary_fill</item>
@@ -77,12 +81,21 @@
         <item name="android:stateListAnimator">@null</item>
     </style>
 
-    <!-- SECONDARY (Google) button: surface fill + 1px border_strong -->
+    <!-- SECONDARY (Google) button: surface fill + 1px border_strong.
+
+         The height is fixed, so the label MUST stay on one line: a label that
+         wrapped was cut through the middle by the button's own bottom edge —
+         "Зареєструватись через Google" did exactly that, and read as a rendering
+         fault rather than as a long word. One line that ellipsizes is the
+         readable failure; 15sp (matching iOS's `SocialButton`, whose label is
+         15pt) leaves enough room that no current string reaches either. -->
     <style name="Auth.SecondaryButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">52dp</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:textSize">16sp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:textColor">@color/text_primary</item>
         <item name="backgroundTint">@color/surface</item>
@@ -93,6 +106,16 @@
         <item name="iconGravity">textStart</item>
         <item name="iconPadding">10dp</item>
         <item name="iconTint">@null</item>
+    </style>
+
+    <!-- The Paste word inside the referral field. 15sp medium in the accent,
+         matching iOS's `referralPaste` (15pt semibold, dsAccent) — one notch
+         under the 16sp value beside it, so it reads as a control and not as
+         part of what has been typed. -->
+    <style name="Auth.SuffixAction" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/accent</item>
     </style>
 
     <!-- Text link button (amber) -->
@@ -141,6 +164,13 @@
     <!-- Locale pill: surface fill + 1px border, fully rounded, flag + code +
          chevron. Tapping opens the language PopupMenu (see AuthActivity). -->
     <style name="Auth.LocalePill" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <!-- Flat, like Auth.PrimaryButton. The Material parent ships a
+             stateListAnimator that raises the button, and elevation outranks
+             sibling draw order — so the pill floated ON TOP of the launch splash
+             that is meant to cover this whole screen. An outlined pill has no
+             business casting a shadow either way. -->
+        <item name="elevation">0dp</item>
+        <item name="android:stateListAnimator">@null</item>
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">34dp</item>
         <item name="android:textAllCaps">false</item>

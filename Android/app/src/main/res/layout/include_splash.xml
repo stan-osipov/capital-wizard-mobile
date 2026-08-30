@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The in-app "Line Draw" splash: the W in the USER'S accent, the wordmark, and
+     a status caption. Laid out to the iOS SplashAnimationView's numbers.
+
+     Shared deliberately. Two surfaces show it — the launch activity, which holds
+     it while the session is checked, and the WebView, which holds it while the
+     page boots — and they must not drift: a launch crosses from one to the other,
+     so any difference in the mark's size or position reads as a jump.
+
+     This is also the ONLY W the app shows. The OS system splash draws no icon
+     (see @drawable/splash_icon_none): its icon is a static vector resource and a
+     resource cannot read a preference, so it was permanently amber no matter
+     what accent somebody chose. A themed background there hands over to this. -->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- 118dp mark in a 130dp box (SplashWView centres the mark in its own
+         bounds). Constrained to both edges with a bottom margin of 56dp, so it
+         centres in the space above that margin — i.e. 28dp above true centre,
+         which is the iOS `centerYAnchor + (-28)`. -->
+    <com.capitalwizard.android.ui.SplashWView
+        android:id="@+id/splash_mark"
+        android:layout_width="130dp"
+        android:layout_height="130dp"
+        android:layout_marginBottom="56dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/splash_wordmark"
+        style="@style/Splash.Wordmark"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="40dp"
+        android:text="@string/app_brand"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/splash_mark" />
+
+    <!-- Caption row, 54dp above the bottom inset (iOS pins it to the safe-area
+         bottom at -54). Status right-aligned, dots in a fixed 22dp column so the
+         sentence stays put while they cycle. -->
+    <TextView
+        android:id="@+id/splash_status"
+        style="@style/Splash.Caption"
+        android:layout_width="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginBottom="54dp"
+        android:gravity="end"
+        android:text="@string/loader_caption"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/splash_dots"
+        app:layout_constraintHorizontal_chainStyle="packed"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/splash_dots"
+        style="@style/Splash.Caption"
+        android:layout_width="22dp"
+        android:layout_marginEnd="24dp"
+        android:gravity="start"
+        android:importantForAccessibility="no"
+        app:layout_constraintBaseline_toBaselineOf="@id/splash_status"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/splash_status" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -220,8 +220,13 @@ class WebViewApplicationController: ApplicationViewController {
         // switch rebuilds the WebView, so this script always describes the load
         // it is attached to.
         let endpoint = EndpointStore.current.rawValue
+        // `mic` advertises that THIS build answers the web view's media-capture
+        // request. A shell built before that existed reports nothing here, and
+        // the web app hides dictation rather than drawing a microphone that can
+        // only ever fail — the same "degrade to unknown, never to a wrong
+        // answer" rule `idiom` and `endpoint` follow.
         let source = """
-        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)' };
+        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)', mic: true };
         document.documentElement.classList.add('cw-native-ios');
         """
         return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
@@ -346,6 +351,44 @@ extension WebViewApplicationController: WKUIDelegate {
             }
         }
         return nil
+    }
+
+    /// Lets the web app reach the microphone, for dictation in the AI assistant.
+    ///
+    /// Without this the web view DENIES `getUserMedia` outright on iOS 15+ —
+    /// silently, from the page's point of view, which is why the dictation
+    /// button has to be able to tell a refusal from a missing device. The
+    /// system permission alert is still shown the first time (it is driven by
+    /// `NSMicrophoneUsageDescription`); `.prompt` is what asks for it rather
+    /// than answering on the user's behalf.
+    ///
+    /// Scoped to OUR OWN ORIGIN. The web view will happily hand this decision
+    /// to any frame that asks, and a page we do not serve has no business
+    /// opening the microphone under our app's permission — a bare `.grant`
+    /// here would extend the user's consent to whatever a third-party iframe
+    /// or a hijacked redirect loaded next.
+    ///
+    /// The Android shell answers the same question in
+    /// `WebViewBridge`/`WebViewActivity`'s `onPermissionRequest`, where the
+    /// runtime permission has to be requested explicitly first — see the
+    /// comment there for why the two files differ in shape.
+    func webView(_ webView: WKWebView,
+                 requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame frame: WKFrameInfo,
+                 type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        let allowedHost = URL(string: WebViewApplicationConst.applicationBaseUrl)?.host
+        guard type == .microphone,
+              origin.protocol == "https",
+              let allowedHost, origin.host == allowedHost else {
+            CWLog.shared.log(
+                "Denied media capture (\(type.rawValue)) for \(origin.host)",
+                category: "WebView"
+            )
+            decisionHandler(.deny)
+            return
+        }
+        decisionHandler(.prompt)
     }
 }
 

@@ -5,6 +5,13 @@
     <!-- Android 13+ gates notifications behind a runtime permission. It is asked
          for only when the web app requests a push token, never at launch. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Dictation in the AI assistant. Asked for only when the web app opens the
+         microphone, never at launch — and the WebView denies `getUserMedia`
+         until `onPermissionRequest` grants it, so BOTH halves are required.
+         The iOS shell expresses the same consent as `NSMicrophoneUsageDescription`
+         plus a `WKUIDelegate` decision; it has no runtime-request step, which is
+         why the two shells differ in shape here. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".CapitalWizardApp"

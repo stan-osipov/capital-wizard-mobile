@@ -15,6 +15,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Capital Wizard uses the microphone so you can dictate a message to the assistant instead of typing it. Recordings are sent for transcription and are not stored.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>

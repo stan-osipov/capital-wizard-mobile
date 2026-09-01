@@ -1,7 +1,9 @@
 package com.capitalwizard.android.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import android.webkit.CookieManager
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -19,6 +22,8 @@ import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
@@ -38,10 +43,22 @@ import com.capitalwizard.android.utils.ServiceManager
 import com.capitalwizard.android.utils.applyIdiomOrientation
 import com.capitalwizard.android.webview.WebViewBridge
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
 
 class WebViewActivity : AppCompatActivity() {
 
     companion object {
+        /**
+         * Request code for the RECORD_AUDIO prompt, raised when the web app
+         * first opens the microphone to dictate a message.
+         *
+         * Distinct from `PushService.PERMISSION_REQUEST_CODE`: both answers
+         * arrive at this Activity's one `onRequestPermissionsResult`, and a
+         * shared code would route a refused microphone into the push
+         * registration.
+         */
+        const val MIC_PERMISSION_REQUEST_CODE = 4711
+
         /** Full dots cycle, matching the iOS splash's `dotsInterval`. */
         private const val DOTS_INTERVAL_MS = 1_400L
 
@@ -223,13 +240,6 @@ class WebViewActivity : AppCompatActivity() {
         // AppCompat performs when the web app reports a new mode. AuthActivity
         // has always relied on exactly this.
 
-        // Edge-to-edge insets
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, 0, systemBars.right, 0)
-            insets
-        }
-
         authService = ServiceManager.getService<AuthService>()
         authService?.onLogout?.subscribe(onLogoutCallback)
 
@@ -242,6 +252,24 @@ class WebViewActivity : AppCompatActivity() {
         bridge = WebViewBridge()
         bridge.onAppReady += onAppReadyCallback
         bridge.onEndpointChanged += onEndpointChangedCallback
+
+        // Edge-to-edge insets. Registered here rather than at the top of
+        // onCreate because it now speaks to `bridge`, which is a line above.
+        //
+        // Top and bottom stay ZERO padding on purpose: the web app paints its
+        // own background up under both bars, as it does on iOS. What it cannot
+        // do on THIS platform is measure them — Android's WebView answers
+        // env(safe-area-inset-*) from the display cutout alone — so the two are
+        // handed over as CSS variables instead. The SIDES are padded here and
+        // not published: a landscape navigation bar has to move the whole app,
+        // and only the toast stack reads a side inset, so publishing them as
+        // well would have them counted twice.
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(systemBars.left, 0, systemBars.right, 0)
+            publishSafeArea(systemBars.top, systemBars.bottom)
+            insets
+        }
 
         splashView = findViewById(R.id.splash_view)
         splashStatusLabel = findViewById(R.id.splash_status)
@@ -282,6 +310,20 @@ class WebViewActivity : AppCompatActivity() {
         splashView.postDelayed(splashTimeout, 15_000)
     }
 
+    /**
+     * Hands the measured system bars to the web app in ITS units. Physical
+     * pixels → CSS pixels (the WebView loads at initial-scale 1, so a CSS pixel
+     * is a dp), rounded UP — half a pixel short leaves a hairline of the bar
+     * over the control that was supposed to clear it.
+     */
+    private fun publishSafeArea(topPx: Int, bottomPx: Int) {
+        val density = resources.displayMetrics.density.takeIf { it > 0f } ?: 1f
+        bridge.setSafeAreaInsets(
+            ceil(topPx / density).toInt(),
+            ceil(bottomPx / density).toInt(),
+        )
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         SplashStatus.post("Creating browser…")
@@ -317,6 +359,15 @@ class WebViewActivity : AppCompatActivity() {
                 favicon: android.graphics.Bitmap?
             ) {
                 super.onPageStarted(view, url, favicon)
+
+                // Before the page's own first paint where it can be: the
+                // document exists by now, and these two land as inline styles
+                // on <html>, which a parse cannot undo. Unconditional — unlike
+                // the seeds below, this is a live measurement rather than
+                // something a document-start script could have carried.
+                bridge.getSafeAreaScript().takeIf { it.isNotEmpty() }
+                    ?.let { view?.evaluateJavascript(it, null) }
+
                 // Fallback for WebView < 83 only — see installDocumentStartScripts.
                 // This races the page's own scripts, which is why it is the fallback:
                 // the pre-paint script may read the theme before the seed lands.
@@ -343,6 +394,11 @@ class WebViewActivity : AppCompatActivity() {
 
                 view?.evaluateJavascript(IOS_BRIDGE_SHIM, null)
                 view?.evaluateJavascript(bridge.getZoomDisableScript(), null)
+
+                // Belt and braces on the insets too: a first layout pass that
+                // lands after onPageStarted leaves that call with nothing to say.
+                bridge.getSafeAreaScript().takeIf { it.isNotEmpty() }
+                    ?.let { view?.evaluateJavascript(it, null) }
 
                 // Fallback theme push in case the pre-paint seed landed late:
                 // applies the saved theme/accent live via __capital_wizard.theme.
@@ -377,7 +433,60 @@ class WebViewActivity : AppCompatActivity() {
             ): Boolean = handleRenderProcessGone(detail)
         }
 
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            /**
+             * Lets the web app reach the microphone, for dictation in the AI
+             * assistant.
+             *
+             * Without this the WebView DENIES `getUserMedia` — the default
+             * `onPermissionRequest` is a no-op, which the page sees as a plain
+             * refusal — so the dictation button would be drawn and do nothing.
+             *
+             * TWO gates, and both are real. This one is the WebView asking
+             * whether the PAGE may use the device; `RECORD_AUDIO` is Android
+             * asking whether the APP may. Granting here without holding the OS
+             * permission produces a recorder that opens and captures silence,
+             * so a missing permission is requested first and the page is left
+             * to ask again — deliberately not queued, because the grant dialog
+             * outlives this callback and a request held across it would be
+             * answering for a page that may have navigated away.
+             *
+             * Scoped to OUR OWN ORIGIN, like the iOS shell's
+             * `requestMediaCapturePermissionFor`: a page we do not serve has no
+             * business opening the microphone under this app's consent.
+             */
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                val wanted = request?.resources ?: return super.onPermissionRequest(request)
+                val origin = request.origin
+                val allowed = wanted.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE) &&
+                    origin?.scheme == "https" &&
+                    origin.host == Uri.parse(WebViewBridge.baseUrl(this@WebViewActivity)).host
+                if (!allowed) {
+                    CWLog.log("Denied media capture for $origin", "WebView")
+                    request.deny()
+                    return
+                }
+
+                val granted = ContextCompat.checkSelfPermission(
+                    this@WebViewActivity,
+                    Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (!granted) {
+                    ActivityCompat.requestPermissions(
+                        this@WebViewActivity,
+                        arrayOf(Manifest.permission.RECORD_AUDIO),
+                        MIC_PERMISSION_REQUEST_CODE,
+                    )
+                    // The page hears a refusal and says so; the next tap, after
+                    // the OS dialog has been answered, succeeds.
+                    request.deny()
+                    return
+                }
+
+                request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+            }
+        }
     }
 
     /**
@@ -670,9 +779,23 @@ class WebViewActivity : AppCompatActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // The microphone prompt is raised from `onPermissionRequest` above and
+        // needs nothing done with its answer: the page was already told no, and
+        // the user's next tap re-asks the WebView, which by then sees the grant.
+        // Logged rather than ignored, because "the button does nothing twice"
+        // is otherwise indistinguishable from a broken recorder.
+        if (requestCode == MIC_PERMISSION_REQUEST_CODE) {
+            val allowed = grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            CWLog.log(
+                "Microphone permission ${if (allowed) "granted" else "refused"}",
+                "WebView",
+            )
+            return
+        }
         if (requestCode != PushService.PERMISSION_REQUEST_CODE) return
         val granted = grantResults.isNotEmpty() &&
-            grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
         pushService?.onPermissionResult(this, granted)
     }
 

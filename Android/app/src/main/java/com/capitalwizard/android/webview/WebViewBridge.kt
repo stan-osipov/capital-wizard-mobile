@@ -122,8 +122,14 @@ class WebViewBridge {
         // switch restarts the Activity, so this always describes the live load.
         val endpoint = webView?.context?.let { EndpointStore.current(it).channel }
             ?: AppEndpoint.PRODUCTION.channel
+        // `mic` advertises that THIS build grants the web view's microphone
+        // request (and holds RECORD_AUDIO to back it). A shell built before that
+        // existed reports nothing here, and the web app hides dictation rather
+        // than drawing a microphone that can only ever fail — the same "degrade
+        // to unknown, never to a wrong answer" rule `idiom` and `endpoint`
+        // follow. Mirrors the iOS shell's `mic: true`.
         return """
-            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint' };
+            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true };
             document.documentElement.classList.add('cw-native-android');
         """.trimIndent()
     }
@@ -200,6 +206,62 @@ class WebViewBridge {
             (function(){try{
                 var cw = window.__capital_wizard;
                 if (cw && typeof cw.theme === 'function') { cw.theme($payload); }
+            }catch(e){}})();
+        """.trimIndent()
+    }
+
+    /**
+     * The system-bar insets last measured by the Activity, in CSS pixels.
+     * `-1` is "never measured" and is the only state that publishes nothing:
+     * a real 0 has to reach the page like any other number, or the web
+     * default would keep standing over it.
+     */
+    private var safeAreaTopCssPx: Int = -1
+    private var safeAreaBottomCssPx: Int = -1
+
+    /**
+     * Native → web. Records the system-bar insets and pushes them straight
+     * away if a document is up; [getSafeAreaScript] re-states them on every
+     * load. No-op when nothing moved, since the insets listener fires on any
+     * layout pass.
+     */
+    fun setSafeAreaInsets(topCssPx: Int, bottomCssPx: Int) {
+        if (topCssPx == safeAreaTopCssPx && bottomCssPx == safeAreaBottomCssPx) return
+        safeAreaTopCssPx = topCssPx
+        safeAreaBottomCssPx = bottomCssPx
+        val script = getSafeAreaScript()
+        if (script.isEmpty()) return
+        webView?.let { wv -> wv.post { wv.evaluateJavascript(script, null) } }
+    }
+
+    /**
+     * Writes the measured insets as `--sa-top` / `--sa-bottom` inline on
+     * `<html>` — the two tokens every clearance in the web app is stated
+     * against (see the `--sa-*` block in `themes.scss`), and inline styles
+     * outrank the stylesheet's defaults.
+     *
+     * This exists because Android's WebView resolves `env(safe-area-inset-*)`
+     * from the display CUTOUT alone; it is never told about the status or
+     * navigation bars. Under [androidx.activity.enableEdgeToEdge] that left the
+     * web app's phone bar drawing underneath Android's own back/home/recents,
+     * with the tab row clipped and the raised menu disc half covered — and the
+     * status bar only cleared by luck, on phones whose hole-punch cutout is
+     * about a status bar tall.
+     *
+     * **There is deliberately no iOS counterpart.** WKWebView reports the true
+     * safe area, so `env()` is already the right answer there and the tokens
+     * fall back to it untouched.
+     *
+     * Empty until the first measurement, so a page that loads before the first
+     * layout pass simply keeps the defaults until [setSafeAreaInsets] lands.
+     */
+    fun getSafeAreaScript(): String {
+        if (safeAreaTopCssPx < 0 || safeAreaBottomCssPx < 0) return ""
+        return """
+            (function(){try{
+                var s = document.documentElement.style;
+                s.setProperty('--sa-top', '${safeAreaTopCssPx}px');
+                s.setProperty('--sa-bottom', '${safeAreaBottomCssPx}px');
             }catch(e){}})();
         """.trimIndent()
     }

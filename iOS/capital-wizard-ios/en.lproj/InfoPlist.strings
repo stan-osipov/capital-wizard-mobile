@@ -1,0 +1,4 @@
+/* Why the app asks for the microphone. Shown by iOS in the permission alert,
+   so it has to name the feature the user just tapped — "dictate a message" —
+   rather than the capability. */
+"NSMicrophoneUsageDescription" = "Capital Wizard uses the microphone so you can dictate a message to the assistant instead of typing it. Recordings are sent for transcription and are not stored.";

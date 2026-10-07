@@ -6,12 +6,16 @@ import StoreKit
     static let shared = StoreService()
     static let productIds = ["cw_credit_10", "cw_credit_20", "cw_credit_50", "cw_credit_100",
                              "cw_monthly_10", "cw_monthly_25", "cw_monthly_50"]
-    static var available: Bool {
+    private static var isDebugBuild: Bool {
         #if DEBUG
         return true
         #else
         return false
         #endif
+    }
+    static var available: Bool {
+        StoreBillingPolicy.isAvailable(isDebugBuild: isDebugBuild,
+            receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent)
     }
     private var busy = false
     private var updates: Task<Void, Never>?
@@ -62,6 +66,7 @@ import StoreKit
 
     private func submit(_ result: VerificationResult<StoreKit.Transaction>) async throws -> String? {
         guard case .verified(let transaction) = result,
+              transaction.environment == .sandbox,
               let userId = currentUserId, transaction.appAccountToken?.uuidString.lowercased() == userId,
               Self.productIds.contains(transaction.productID) else { throw Failure.unavailable }
         let response = try await call(["action":"verify", "signedTransaction":result.jwsRepresentation], userId:userId)
@@ -116,6 +121,15 @@ import StoreKit
             }
             let prepared = try await call(["action":"prepare"],userId:userId)
             guard prepared["accountToken"] as? String == userId, currentUserId == userId else { return reply("error") }
+            // TestFlight uses sandbox even with a Release configuration. Verify
+            // Apple's app transaction before opening its sheet; the receipt
+            // filename used for the synchronous bridge capability is only a hint.
+            if !Self.isDebugBuild {
+                guard case .verified(let app) = try await AppTransaction.shared,
+                      app.environment == .sandbox,
+                      app.bundleID == Bundle.main.bundleIdentifier else { return reply("error") }
+            }
+            guard Self.available, currentUserId == userId else { return reply("error") }
             purchaseAttempted = true
             switch try await product.purchase(options:[.appAccountToken(uuid)]) {
             case .userCancelled: return reply("cancelled")

@@ -18,6 +18,9 @@ import kotlin.coroutines.resumeWithException
 object StoreService {
     val productIds = listOf("cw_credit_10", "cw_credit_20", "cw_credit_50", "cw_credit_100",
         "cw_monthly_10", "cw_monthly_25", "cw_monthly_50")
+    // Unlike TestFlight, Play test tracks do not guarantee sandbox payments:
+    // only license testers get test cards. Keep Android release billing off
+    // until its separate Play setup and device verification are complete.
     val available: Boolean get() = BuildConfig.DEBUG
     private var busy = false
     private var billing: BillingClient? = null

@@ -226,7 +226,7 @@ class WebViewApplicationController: ApplicationViewController {
         // only ever fail — the same "degrade to unknown, never to a wrong
         // answer" rule `idiom` and `endpoint` follow.
         let source = """
-        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)', mic: true };
+        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)', mic: true, store: \(StoreService.available ? "true" : "false") };
         document.documentElement.classList.add('cw-native-ios');
         """
         return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)

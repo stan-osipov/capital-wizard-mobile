@@ -31,6 +31,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.capitalwizard.android.R
+import com.capitalwizard.android.services.StoreService
 import com.capitalwizard.android.services.AuthService
 import com.capitalwizard.android.services.DeepLinkService
 import com.capitalwizard.android.services.PushRegistration
@@ -669,6 +670,7 @@ class WebViewActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        lifecycleScope.launch { StoreService.reconcile(this@WebViewActivity) }
 
         // Backstop for a tap that stashed a page while we were coming up and
         // whose event nobody was subscribed for yet. One-shot, so this is a

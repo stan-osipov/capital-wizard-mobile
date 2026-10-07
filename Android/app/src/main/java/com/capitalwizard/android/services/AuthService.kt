@@ -64,6 +64,7 @@ class AuthService(private val context: Context) {
     }
 
     val auth get() = supabase.auth
+    val storeUserId: String? get() = if (isLoggedIn) auth.currentUserOrNull()?.id else null
 
     init {
         // Observe session status changes

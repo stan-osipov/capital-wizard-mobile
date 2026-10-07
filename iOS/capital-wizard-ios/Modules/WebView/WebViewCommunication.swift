@@ -61,6 +61,7 @@ class WebViewCommunication: NSObject {
     }
 
     @objc private func notifyForeground() {
+        Task { @MainActor in await StoreService.shared.reconcile() }
         pushForeground()
     }
 
@@ -235,7 +236,7 @@ class WebViewCommunication: NSObject {
 extension WebViewCommunication: WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == WebViewApplicationConst.contentControllerName {
-            guard let dict = message.body as? [String: Any] else {
+            guard message.frameInfo.isMainFrame, let dict = message.body as? [String: Any] else {
                 return
             }
             
@@ -291,11 +292,26 @@ extension WebViewCommunication: WKScriptMessageHandler {
 
         CWLog.shared.log("Bridge system event: \(eventName)", category: "Bridge")
 
+        if ["store-products", "store-purchase", "store-restore", "store-manage"].contains(eventName) {
+            Task { @MainActor [weak self] in
+                guard let self, let view = self.wkWebView,
+                      view.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
+                let reply = await StoreService.shared.handle(dict)
+                guard let reply, self.wkWebView === view,
+                      view.url?.host == URL(string: EndpointStore.baseUrl)?.host,
+                      let data = try? JSONSerialization.data(withJSONObject: reply.payload),
+                      let json = String(data: data, encoding: .utf8) else { return }
+                view.evaluateJavaScript("window.__capital_wizard?.\(reply.handler)?.(\(json));", completionHandler: nil)
+            }
+            return
+        }
+
         if eventName == "api-ready" {
             finilizeLoad()
         }
 
         if eventName == "app-ready" {
+            Task { @MainActor in await StoreService.shared.reconcile() }
             onAppReady.invoke(())
         }
 

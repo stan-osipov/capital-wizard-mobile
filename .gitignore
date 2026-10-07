@@ -1,2 +1,5 @@
 # Per-user Claude Code permission state
 **/.claude/settings.local.json
+
+# Conversation-local native build output
+.build/

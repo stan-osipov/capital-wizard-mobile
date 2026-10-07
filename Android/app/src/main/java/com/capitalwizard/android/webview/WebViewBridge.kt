@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import com.capitalwizard.android.services.StoreService
 import com.capitalwizard.android.services.AuthService
 import com.capitalwizard.android.services.PushRegistration
 import com.capitalwizard.android.services.PushService
@@ -129,7 +130,7 @@ class WebViewBridge {
         // to unknown, never to a wrong answer" rule `idiom` and `endpoint`
         // follow. Mirrors the iOS shell's `mic: true`.
         return """
-            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true };
+            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true, store: ${StoreService.available} };
             document.documentElement.classList.add('cw-native-android');
         """.trimIndent()
     }
@@ -487,7 +488,13 @@ class WebViewBridge {
 
         when (eventName) {
             "api-ready" -> finalizeLoad()
-            "app-ready" -> onAppReady.invoke(Unit)
+            "app-ready" -> {
+                onAppReady.invoke(Unit)
+                webView?.post {
+                    val activity = webView?.context as? Activity ?: return@post
+                    CoroutineScope(Dispatchers.Main).launch { StoreService.reconcile(activity) }
+                }
+            }
             "logout" -> {
                 CoroutineScope(Dispatchers.Main).launch {
                     ServiceManager.getService<AuthService>()?.signOut()
@@ -502,6 +509,21 @@ class WebViewBridge {
             "open-push-settings" -> openPushSettings()
             "open-external-url" -> openExternalUrl(json.optString("url"))
             "set-endpoint" -> setEndpoint(json.optString("endpoint"))
+            "store-products", "store-purchase", "store-restore", "store-manage" -> {
+                val view = webView ?: return
+                view.post {
+                    if (Uri.parse(view.url ?: "").host != Uri.parse(baseUrl(view.context)).host) return@post
+                    var context = view.context
+                    while (context is ContextWrapper && context !is Activity) context = context.baseContext
+                    val activity = context as? Activity ?: return@post
+                    CoroutineScope(Dispatchers.Main).launch {
+                        val reply = StoreService.handle(activity, json) ?: return@launch
+                        if (webView === view && Uri.parse(view.url ?: "").host == Uri.parse(baseUrl(view.context)).host) {
+                            view.evaluateJavascript("window.__capital_wizard?.${reply.handler}?.(${reply.payload});", null)
+                        }
+                    }
+                }
+            }
         }
     }
 

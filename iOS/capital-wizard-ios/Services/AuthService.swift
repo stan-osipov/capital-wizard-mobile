@@ -15,6 +15,8 @@ class AuthService: NSObject, Service {
 
     private var session: Session?
 
+    var storeUserId: String? { isLoggedIn ? session?.user.id.uuidString.lowercased() : nil }
+
     var onLogin:  Event<Void> = Event()
     var onLogout: Event<Void> = Event()
 

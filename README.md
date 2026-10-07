@@ -40,7 +40,7 @@ Build tools and caches installed for this worktree live under ignored `.build/`.
    account for the team that owns `com.capital-wizard`; use automatic signing.
 2. Select the `capital-wizard-ios` scheme and a generic iOS device destination.
    Keep Archive on Release and StoreKit Configuration on None. Set a build number
-   that has not been uploaded for version 1.6 (Xcode can manage this on upload).
+   that has not been uploaded for version 1.7 (Xcode can manage this on upload).
 3. Product → Archive → Distribute App → TestFlight Internal Only. This build is
    for administrator testing, not submission to the public App Store.
 4. Wait for App Store Connect processing, then add the build to an internal

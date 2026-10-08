@@ -51,9 +51,11 @@ console setup, server verification, rollout limits and device tests are document
 in `../capital-wizard/docs/mobile-wallet-payments.md`.
 
 Purchases require a signed-in Capital Wizard administrator. iOS supports Debug
-builds and TestFlight: a sandbox receipt enables the bridge, and Release builds
-must also verify Apple's signed sandbox app transaction before opening a purchase
-sheet. Missing/production receipts keep Release billing unavailable. Every iOS
+builds and TestFlight: a sandbox receipt enables the bridge and is checked again
+with the server account binding immediately before checkout. The app-download
+`AppTransaction` is not a prerequisite for in-app purchases; it can be unavailable
+or unverified independently of the purchase being requested. Missing/production
+receipts keep Release billing unavailable. Every iOS
 purchase must be a verified sandbox transaction before it is sent to the server.
 Android remains Debug-only: Play test tracks can charge real money for users who
 are not license testers, unlike TestFlight. Its release gate stays closed until

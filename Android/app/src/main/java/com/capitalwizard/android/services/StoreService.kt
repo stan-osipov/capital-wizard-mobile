@@ -147,8 +147,8 @@ object StoreService {
 
     suspend fun handle(activity: Activity, request: JSONObject): Reply? {
         val event = request.optString("eventName")
-        if (!available) return null
         if (event == "store-manage") {
+            if (!available) return null
             if (currentUserId != null) activity.startActivity(Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://play.google.com/store/account/subscriptions?package=${BuildConfig.APPLICATION_ID}")))
             return null
@@ -163,6 +163,7 @@ object StoreService {
         })
         if (busy) return reply("error", JSONObject().put("errorCode", "store_busy"))
         if (currentUserId == null) return reply("error", JSONObject().put("errorCode", "session_unavailable"))
+        if (!available) return reply("error", JSONObject().put("errorCode", "payments_unavailable"))
         if (requestId.isBlank() || userId.isBlank() || currentUserId != userId)
             return reply("error", JSONObject().put("errorCode", "account_mismatch"))
         busy = true
@@ -199,6 +200,9 @@ object StoreService {
             if (currentUserId != userId) throw StoreFailure("account_mismatch")
             val offerToken = if (product.productType == BillingClient.ProductType.SUBS) monthlyOffer(product)?.offerToken else oneTimeOffer(product)?.offerToken
             if (offerToken == null) return reply("error", JSONObject().put("errorCode", "product_unavailable"))
+            // Mirror the final iOS sandbox gate. Play has no TestFlight receipt;
+            // this platform remains Debug-only until license testing is ready.
+            if (!available) throw StoreFailure("payments_unavailable")
             val params = BillingFlowParams.newBuilder().setObfuscatedAccountId(prepared.getString("accountToken"))
                 .setProductDetailsParamsList(listOf(BillingFlowParams.ProductDetailsParams.newBuilder()
                     .setProductDetails(product).setOfferToken(offerToken).build())).build()

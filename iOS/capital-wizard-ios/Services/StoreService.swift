@@ -85,8 +85,8 @@ import Auth
 
     func handle(_ request: [String: Any]) async -> Reply? {
         let event = request["eventName"] as? String ?? ""
-        guard Self.available else { return nil }
         if event == "store-manage" {
+            guard Self.available else { return nil }
             if currentUserId != nil, let url = URL(string: "https://apps.apple.com/account/subscriptions") {
                 await UIApplication.shared.open(url)
             }
@@ -100,6 +100,7 @@ import Auth
             }
             return Reply(handler: handler, payload: ["requestId":requestId,"userId":userId,"status":status].merging(extra) { _, new in new })
         }
+        guard Self.available else { return reply("error", ["errorCode":"payments_unavailable"]) }
         guard !busy else { return reply("error", ["errorCode":"store_busy"]) }
         guard currentUserId != nil else { return reply("error", ["errorCode":"session_unavailable"]) }
         guard currentUserId == userId, let uuid = UUID(uuidString:userId) else {
@@ -138,22 +139,16 @@ import Auth
             }
             failureCode = "server_unavailable"
             let prepared = try await call(["action":"prepare"],userId:userId)
-            guard prepared["accountToken"] as? String == userId, currentUserId == userId else { return reply("error", ["errorCode":"account_mismatch"]) }
-            // TestFlight uses sandbox even with a Release configuration. Verify
-            // Apple's app transaction before opening its sheet; the receipt
-            // filename used for the synchronous bridge capability is only a hint.
-            if !Self.isDebugBuild {
-                failureCode = "app_verification_failed"
-                guard case .verified(let app) = try await AppTransaction.shared else {
-                    return reply("error", ["errorCode":"app_verification_failed"])
-                }
-                guard app.environment == .sandbox else { return reply("error", ["errorCode":"sandbox_required"]) }
-                guard app.bundleID == Bundle.main.bundleIdentifier else {
-                    return reply("error", ["errorCode":"app_verification_failed"])
-                }
-            }
-            guard Self.available else { return reply("error", ["errorCode":"payments_unavailable"]) }
             guard currentUserId == userId else { return reply("error", ["errorCode":"account_mismatch"]) }
+            // TestFlight purchases use sandbox; recheck the system receipt.
+            // AppTransaction describes the app download, not this IAP: an absent
+            // or unverified download record must not block StoreKit's own sheet.
+            // submit() and the server still verify the actual purchase signature,
+            // sandbox environment, product and account before granting credit.
+            try StoreBillingPolicy.validateCheckout(isDebugBuild: Self.isDebugBuild,
+                receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent,
+                accountToken: prepared["accountToken"] as? String, userId: userId)
+            CWLog.shared.log("store-purchase: opening checkout", category: "Store")
             failureCode = "store_unavailable"
             purchaseAttempted = true
             switch try await product.purchase(options:[.appAccountToken(uuid)]) {

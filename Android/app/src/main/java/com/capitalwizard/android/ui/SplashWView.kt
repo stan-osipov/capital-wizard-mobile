@@ -116,6 +116,20 @@ class SplashWView @JvmOverloads constructor(
             val py = top + y * scale
             if (i == 0) markPath.moveTo(px, py) else markPath.lineTo(px, py)
         }
+        if (com.capitalwizard.android.utils.AppProduct.isCodingLab) {
+            // The approved Experiment outline; the same geometry as iOS.
+            val unit = markPx / 48f
+            markPath.reset()
+            markPath.moveTo(left + 21 * unit, top + 6 * unit)
+            markPath.lineTo(left + 21 * unit, top + 18 * unit)
+            markPath.lineTo(left + 9.5f * unit, top + 37.5f * unit)
+            markPath.quadTo(left + 8 * unit, top + 42 * unit, left + 13 * unit, top + 42 * unit)
+            markPath.lineTo(left + 35 * unit, top + 42 * unit)
+            markPath.quadTo(left + 40 * unit, top + 42 * unit, left + 38.5f * unit, top + 37.5f * unit)
+            markPath.lineTo(left + 27 * unit, top + 18 * unit)
+            markPath.lineTo(left + 27 * unit, top + 6 * unit)
+            markPath.close()
+        }
         measure.setPath(markPath, false)
         pathLen = measure.length
     }

@@ -25,14 +25,14 @@ import Foundation
 class DeepLinkService: Service {
 
     /// Host claimed by the associated-domains entitlement.
-    static let linkHost = "app.capital-wizard.com"
+    static let linkHost = AppProduct.current.appHost
     /// The marketing apex, claimed for referral links ONLY. Its association
     /// file allow-lists `/r/*`, so nothing else on that domain reaches us.
-    static let referralHost = "capital-wizard.com"
+    static let referralHost = AppProduct.current.siteHost
     /// Web route a referral code lands on. The register screen reads `ref`.
     static let referralRoute = "/auth/register"
     /// Custom scheme registered in Info.plist (`CFBundleURLSchemes`).
-    static let customScheme = "capital-wizard-ios"
+    static let customScheme = AppProduct.current.urlScheme
     /// Custom-scheme host reserved for routing. `auth` belongs to AuthService.
     static let routeHost = "open"
 

@@ -385,11 +385,11 @@ class LoginViewController: UIViewController {
 
         if let termsRange = text.range(of: termsWord) {
             let nsRange = NSRange(termsRange, in: text)
-            attributed.addAttribute(.link, value: "https://capital-wizard.com/terms", range: nsRange)
+            attributed.addAttribute(.link, value: AppProduct.current.legalOrigin + "/terms", range: nsRange)
         }
         if let privacyRange = text.range(of: privacyWord) {
             let nsRange = NSRange(privacyRange, in: text)
-            attributed.addAttribute(.link, value: "https://capital-wizard.com/privacy", range: nsRange)
+            attributed.addAttribute(.link, value: AppProduct.current.legalOrigin + "/privacy", range: nsRange)
         }
 
         let style = NSMutableParagraphStyle()

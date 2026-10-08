@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		CE35BAD12F3735D300A4372C /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CE35BAD02F3735D300A4372C /* Auth */; };
+		C0D1AB000000000000000001 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CE35BAD02F3735D300A4372C /* Auth */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,6 +32,7 @@
 		CE35BA852F37336B00A4372C /* capital-wizard-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "capital-wizard-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE35BA9B2F37336D00A4372C /* capital-wizard-iosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "capital-wizard-iosTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE35BAA52F37336D00A4372C /* capital-wizard-iosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "capital-wizard-iosUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0D1AB000000000000000002 /* coding-lab-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "coding-lab-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,6 +43,16 @@
 			);
 			target = CE35BA842F37336B00A4372C /* capital-wizard-ios */;
 		};
+		C0D1AB000000000000000003 /* Shared source exceptions for Coding Lab */ = {
+            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+            membershipExceptions = (Info.plist);
+            target = C0D1AB000000000000000008 /* coding-lab-ios */;
+        };
+        C0D1AB000000000000000004 /* Coding Lab configuration exceptions */ = {
+            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+            membershipExceptions = (Info.plist);
+            target = C0D1AB000000000000000008 /* coding-lab-ios */;
+        };
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -48,6 +60,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				CE35BAAD2F37336D00A4372C /* Exceptions for "capital-wizard-ios" folder in "capital-wizard-ios" target */,
+                C0D1AB000000000000000003 /* Shared source exceptions for Coding Lab */,
 			);
 			path = "capital-wizard-ios";
 			sourceTree = "<group>";
@@ -62,6 +75,12 @@
 			path = "capital-wizard-iosUITests";
 			sourceTree = "<group>";
 		};
+		C0D1AB000000000000000005 /* CodingLab */ = {
+            isa = PBXFileSystemSynchronizedRootGroup;
+            exceptions = (C0D1AB000000000000000004 /* Coding Lab configuration exceptions */);
+            path = CodingLab;
+            sourceTree = "<group>";
+        };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +106,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0D1AB000000000000000006 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C0D1AB000000000000000001 /* Auth in Frameworks */); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -94,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				CE35BA872F37336B00A4372C /* capital-wizard-ios */,
+                C0D1AB000000000000000005 /* CodingLab */,
 				CE35BA9E2F37336D00A4372C /* capital-wizard-iosTests */,
 				CE35BAA82F37336D00A4372C /* capital-wizard-iosUITests */,
 				CE35BA862F37336B00A4372C /* Products */,
@@ -104,6 +125,7 @@
 			isa = PBXGroup;
 			children = (
 				CE35BA852F37336B00A4372C /* capital-wizard-ios.app */,
+                C0D1AB000000000000000002 /* coding-lab-ios.app */,
 				CE35BA9B2F37336D00A4372C /* capital-wizard-iosTests.xctest */,
 				CE35BAA52F37336D00A4372C /* capital-wizard-iosUITests.xctest */,
 			);
@@ -182,6 +204,19 @@
 			productReference = CE35BAA52F37336D00A4372C /* capital-wizard-iosUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		C0D1AB000000000000000008 /* coding-lab-ios */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = C0D1AB000000000000000010 /* Build configuration list for coding-lab-ios */;
+            buildPhases = (C0D1AB000000000000000007 /* Sources */, C0D1AB000000000000000006 /* Frameworks */, C0D1AB000000000000000009 /* Resources */);
+            buildRules = ();
+            dependencies = ();
+            fileSystemSynchronizedGroups = (CE35BA872F37336B00A4372C /* capital-wizard-ios */, C0D1AB000000000000000005 /* CodingLab */);
+            name = "coding-lab-ios";
+            packageProductDependencies = (CE35BAD02F3735D300A4372C /* Auth */);
+            productName = "coding-lab-ios";
+            productReference = C0D1AB000000000000000002 /* coding-lab-ios.app */;
+            productType = "com.apple.product-type.application";
+        };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -223,6 +258,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+                C0D1AB000000000000000008 /* coding-lab-ios */,
 				CE35BA842F37336B00A4372C /* capital-wizard-ios */,
 				CE35BA9A2F37336D00A4372C /* capital-wizard-iosTests */,
 				CE35BAA42F37336D00A4372C /* capital-wizard-iosUITests */,
@@ -252,6 +288,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0D1AB000000000000000009 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -276,6 +313,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0D1AB000000000000000007 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -549,6 +587,76 @@
 			};
 			name = Release;
 		};
+		C0D1AB000000000000000011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = CodingLabAppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = "CodingLab/coding-lab.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V3B5J86794;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "CodingLab/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Coding Lab";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "co.coding-lab.ios";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+                SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CODING_LAB";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+
+		C0D1AB000000000000000012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = CodingLabAppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = "CodingLab/coding-lab.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V3B5J86794;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "CodingLab/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Coding Lab";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "co.coding-lab.ios";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+                SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CODING_LAB";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -588,6 +696,12 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		C0D1AB000000000000000010 /* Build configuration list for coding-lab-ios */ = {
+            isa = XCConfigurationList;
+            buildConfigurations = (C0D1AB000000000000000011 /* Debug */, C0D1AB000000000000000012 /* Release */);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */

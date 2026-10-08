@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Coding Lab</string>
+    <string name="app_brand" translatable="false">Coding Lab</string>
+    <string name="cd_brand_logo">Coding Lab</string>
+    <string name="login_title">Welcome to Coding Lab</string>
+    <string name="login_subtitle">Sign in to your projects, conversations, and machines.</string>
+    <string name="signup_subtitle">Build with AI. Keep your projects and machines together.</string>
+    <string name="loader_caption">Preparing your workspace</string>
+    <string name="terms_url">https://app.coding-lab.co/terms</string>
+    <string name="privacy_url">https://app.coding-lab.co/privacy</string>
+    <string name="push_channel_description">Reminders and updates from Coding Lab</string>
+</resources>

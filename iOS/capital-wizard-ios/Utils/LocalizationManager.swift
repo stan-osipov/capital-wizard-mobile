@@ -67,6 +67,10 @@ class LocalizationManager {
     }
 
     func string(_ key: String) -> String {
+        if AppProduct.current == .codingLab,
+           let value = bundle?.localizedString(forKey: key, value: nil, table: "CodingLab"), value != key {
+            return value
+        }
         return bundle?.localizedString(forKey: key, value: nil, table: nil) ?? key
     }
 }

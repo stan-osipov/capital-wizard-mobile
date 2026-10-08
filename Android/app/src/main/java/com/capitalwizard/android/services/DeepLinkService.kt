@@ -26,18 +26,18 @@ class DeepLinkService(private val context: Context) {
 
     companion object {
         /** Host declared in the app-link intent filter. */
-        const val LINK_HOST = "app.capital-wizard.com"
+        val LINK_HOST = com.capitalwizard.android.utils.AppProduct.appHost
         /**
          * The marketing apex, claimed for referral links ONLY — the manifest
          * narrows it to `/r` and the assetlinks file is shared with the app
          * host. iOS expresses the same narrowing as an allow-list inside its
          * association file, because there the domain default is the reverse.
          */
-        const val REFERRAL_HOST = "capital-wizard.com"
+        val REFERRAL_HOST = com.capitalwizard.android.utils.AppProduct.siteHost
         /** Web route a referral code lands on. The register screen reads `ref`. */
         const val REFERRAL_ROUTE = "/auth/register"
         /** Custom scheme registered in the manifest. */
-        const val CUSTOM_SCHEME = "capital-wizard-android"
+        val CUSTOM_SCHEME = com.capitalwizard.android.utils.AppProduct.urlScheme
         /** Custom-scheme host reserved for routing. `auth` belongs to AuthService. */
         const val ROUTE_HOST = "open"
 

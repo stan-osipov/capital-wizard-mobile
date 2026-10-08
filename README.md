@@ -3,6 +3,46 @@
 Hybrid iOS and Android shells for Capital Wizard. Build instructions are in
 `CLAUDE.md`.
 
+## Coding Lab
+
+The shared iOS project also contains the `coding-lab-ios` target and shared
+scheme. It builds **Coding Lab** (`co.coding-lab.ios`, version 1.0) with its own
+flask icon, native launch/auth branding, OAuth callback, associated domain,
+and `https://app.coding-lab.co/` WebView. Select this scheme in Xcode to run or
+archive it. Both targets share the native source and bridge; `AppProduct` is
+selected at compile time with `CODING_LAB`.
+
+```sh
+xcodebuild -project iOS/capital-wizard-ios.xcodeproj -scheme coding-lab-ios \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project iOS/capital-wizard-ios.xcodeproj -scheme coding-lab-ios \
+  -configuration Release -destination 'generic/platform=iOS' \
+  -archivePath .build/CodingLab.xcarchive -allowProvisioningUpdates archive
+xcodebuild -exportArchive -archivePath .build/CodingLab.xcarchive \
+  -exportOptionsPlist iOS/ExportOptions-TestFlight.plist \
+  -exportPath .build/coding-lab-testflight -allowProvisioningUpdates
+```
+
+Apple team: `V3B5J86794`. On 2026-10-08, `co.coding-lab.ios` was registered with
+Apple Sign In, Push Notifications, and Associated Domains. The shared Supabase
+project accepts `coding-lab-ios://auth/callback` and
+`coding-lab-android://auth/callback`, and its Apple audience list includes
+`co.coding-lab.ios`. Existing callbacks/audiences were preserved.
+The web repository's product packaging writes Coding Lab's own Apple association
+file to its app host. The marketing apex is not claimed by iOS.
+
+Android mirrors the identity through `capitalWizard` and `codingLab` flavors:
+`./gradlew assembleCapitalWizardDebug assembleCodingLabDebug`. Coding Lab uses
+`co.codinglab.android`; supply its own `app/src/codingLab/google-services.json`
+before enabling Firebase push. The existing Capital Wizard Firebase client is
+never compiled into Coding Lab. Android app-link verification needs Coding Lab's
+release certificate fingerprint before its `assetlinks.json` can be published.
+
+Native store billing remains disabled in Coding Lab because the current catalog
+and verification configuration belong to Capital Wizard. Apple/Google sign-in,
+signed-in project navigation, and push delivery still need a real user/device
+smoke test before a public App Store release.
+
 ## Direct mobile wallet sandbox integration
 
 Both shells include matching `StoreService` implementations: system StoreKit on

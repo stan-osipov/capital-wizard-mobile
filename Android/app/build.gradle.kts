@@ -16,6 +16,14 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
 
+// Capital Wizard's Firebase client must never be compiled into Coding Lab.
+// Until its own client is supplied, the shell reports push as unavailable.
+tasks.configureEach {
+    if (name.startsWith("processCodingLab") && name.endsWith("GoogleServices")) {
+        enabled = file("src/codingLab/google-services.json").exists()
+    }
+}
+
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {
@@ -48,6 +56,26 @@ android {
             storePassword = keystoreProperties["storePassword"] as String?
             keyAlias = keystoreProperties["keyAlias"] as String?
             keyPassword = keystoreProperties["keyPassword"] as String?
+        }
+    }
+    flavorDimensions += "product"
+    productFlavors {
+        create("capitalWizard") {
+            dimension = "product"
+            buildConfigField("boolean", "CODING_LAB", "false")
+            manifestPlaceholders["productHost"] = "app.capital-wizard.com"
+            manifestPlaceholders["productSiteHost"] = "capital-wizard.com"
+            manifestPlaceholders["appAuthRedirectScheme"] = "capital-wizard-android"
+        }
+        create("codingLab") {
+            dimension = "product"
+            applicationId = "co.codinglab.android"
+            versionCode = 1
+            versionName = "1.0"
+            buildConfigField("boolean", "CODING_LAB", "true")
+            manifestPlaceholders["productHost"] = "app.coding-lab.co"
+            manifestPlaceholders["productSiteHost"] = "coding-lab.co"
+            manifestPlaceholders["appAuthRedirectScheme"] = "coding-lab-android"
         }
     }
     // ────────────────────────────────────────

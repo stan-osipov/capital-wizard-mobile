@@ -92,6 +92,10 @@ class BrandLogoView: UIView {
         markLayer.path = path.cgPath
         // Stroke width 13 on the 0–100 space, scaled to the tile.
         markLayer.lineWidth = 13 * scale
+        if AppProduct.current == .codingLab {
+            markLayer.path = CodingLabMark.outline(in: bounds.insetBy(dx: bounds.width * 0.16, dy: bounds.height * 0.16))
+            markLayer.lineWidth = bounds.width * 0.048
+        }
 
         if let border = layer.sublayers?.first(where: { $0.name == "insetBorder" }) {
             border.frame = bounds

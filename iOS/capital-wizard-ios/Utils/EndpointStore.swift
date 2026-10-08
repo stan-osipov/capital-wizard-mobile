@@ -24,8 +24,8 @@ enum AppEndpoint: String, CaseIterable {
     /// Trailing slash included: callers concatenate a route straight onto this.
     var baseUrl: String {
         switch self {
-        case .production:  return "https://app.capital-wizard.com/"
-        case .development: return "https://dev.capital-wizard.com/"
+        case .production:  return "https://\(AppProduct.current.appHost)/"
+        case .development: return "https://\(AppProduct.current.developmentHost)/"
         }
     }
 

@@ -237,7 +237,7 @@ class SplashAnimationView: UIView {
     /// "Capital Wizard" — 21pt semibold, letter-spacing -0.01em (≈ -0.21pt at 21pt).
     private func makeWordmarkText() -> NSAttributedString {
         NSAttributedString(
-            string: "Capital Wizard",
+            string: AppProduct.current.name,
             attributes: [
                 .font: UIFont.systemFont(ofSize: 21, weight: .semibold),
                 .kern: -0.21,
@@ -258,6 +258,9 @@ class SplashAnimationView: UIView {
 
     /// Builds the W path scaled to a 118pt mark centered in the 130pt box.
     private func makeMarkPath() -> CGPath {
+        if AppProduct.current == .codingLab {
+            return CodingLabMark.outline(in: CGRect(x: 6, y: 6, width: Self.markSize, height: Self.markSize))
+        }
         let scale = Self.markSize / 100.0          // 0–100 space → 118pt
         let inset = (Self.boxSize - Self.markSize) / 2  // center in the box
         let path = UIBezierPath()

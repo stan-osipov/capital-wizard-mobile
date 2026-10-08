@@ -39,7 +39,7 @@ class AuthService: NSObject, Service {
         UserDefaults.standard.bool(forKey: everSignedInKey)
     }
 
-    private static let redirectURL = URL(string: "capital-wizard-ios://auth/callback")!
+    private static let redirectURL = URL(string: "\(AppProduct.current.urlScheme)://auth/callback")!
 
     private var appleSignInContinuation: CheckedContinuation<Void, Error>?
     private var appleSignInContextProvider: AppleSignInPresentationContext?

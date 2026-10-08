@@ -2,6 +2,6 @@
 /// environment before Release purchases; the server verifies every transaction.
 enum StoreBillingPolicy {
     static func isAvailable(isDebugBuild: Bool, receiptName: String?) -> Bool {
-        isDebugBuild || receiptName == "sandboxReceipt"
+        AppProduct.current.supportsStoreBilling && (isDebugBuild || receiptName == "sandboxReceipt")
     }
 }

@@ -16,8 +16,8 @@ import android.content.Context
  */
 enum class AppEndpoint(val channel: String, val baseUrl: String) {
     /** Trailing slash included: callers concatenate a route straight onto this. */
-    PRODUCTION("production", "https://app.capital-wizard.com/"),
-    DEVELOPMENT("development", "https://dev.capital-wizard.com/");
+    PRODUCTION("production", "https://${AppProduct.appHost}/"),
+    DEVELOPMENT("development", "https://${AppProduct.developmentHost}/");
 
     companion object {
         fun fromChannel(name: String?): AppEndpoint? =

@@ -58,7 +58,7 @@ class AuthService(private val context: Context) {
     ) {
         install(Auth) {
             flowType = FlowType.PKCE
-            scheme = "capital-wizard-android"
+            scheme = com.capitalwizard.android.utils.AppProduct.urlScheme
             host = "auth/callback"
         }
     }

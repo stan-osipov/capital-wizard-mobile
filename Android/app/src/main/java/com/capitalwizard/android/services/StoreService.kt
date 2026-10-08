@@ -21,7 +21,7 @@ object StoreService {
     // Unlike TestFlight, Play test tracks do not guarantee sandbox payments:
     // only license testers get test cards. Keep Android release billing off
     // until its separate Play setup and device verification are complete.
-    val available: Boolean get() = BuildConfig.DEBUG
+    val available: Boolean get() = BuildConfig.DEBUG && com.capitalwizard.android.utils.AppProduct.supportsStoreBilling
     private var busy = false
     private var billing: BillingClient? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -149,7 +149,7 @@ object StoreService {
         if (!available) return null
         if (event == "store-manage") {
             if (currentUserId != null) activity.startActivity(Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/account/subscriptions?package=com.capitalwizard.android")))
+                Uri.parse("https://play.google.com/store/account/subscriptions?package=${BuildConfig.APPLICATION_ID}")))
             return null
         }
         val requestId = request.optString("requestId")

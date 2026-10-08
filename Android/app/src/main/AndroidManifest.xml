@@ -38,7 +38,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="capital-wizard-android"
+                    android:scheme="${appAuthRedirectScheme}"
                     android:host="auth"
                     android:pathPrefix="/callback" />
             </intent-filter>
@@ -58,11 +58,14 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="app.capital-wizard.com" />
+                <data android:scheme="https" android:host="${productHost}" />
 
                 <data android:pathPrefix="/join" />
 
                 <data android:pathPrefix="/dashboard" />
+                <data android:pathPrefix="/ai-project" />
+                <data android:pathPrefix="/worker" />
+                <data android:pathPrefix="/ai" />
                 <data android:pathPrefix="/transactions" />
                 <data android:pathPrefix="/import" />
                 <data android:pathPrefix="/assets" />
@@ -96,7 +99,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="capital-wizard.com" />
+                <data android:scheme="https" android:host="${productSiteHost}" />
                 <data android:pathPrefix="/r" />
             </intent-filter>
 
@@ -107,7 +110,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="capital-wizard-android"
+                    android:scheme="${appAuthRedirectScheme}"
                     android:host="open" />
             </intent-filter>
         </activity>

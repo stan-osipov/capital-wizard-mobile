@@ -30,6 +30,26 @@ class AuthBackgroundView: UIView {
         glowLayer.locations  = [0.0, 1.0]
         layer.addSublayer(glowLayer)
         applyColors()
+        if AppProduct.current == .codingLab {
+            let logo = BrandLogoView(size: 30)
+            let label = UILabel()
+            label.text = AppProduct.current.name
+            label.font = .systemFont(ofSize: 17, weight: .semibold)
+            label.textColor = .label
+            let brand = UIStackView(arrangedSubviews: [logo, label])
+            brand.axis = .horizontal
+            brand.alignment = .center
+            brand.spacing = 9
+            brand.translatesAutoresizingMaskIntoConstraints = false
+            brand.isAccessibilityElement = true
+            brand.accessibilityLabel = AppProduct.current.name
+            addSubview(brand)
+            NSLayoutConstraint.activate([
+                brand.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+                brand.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 8),
+                brand.heightAnchor.constraint(equalToConstant: 30)
+            ])
+        }
     }
 
     private var effectiveStyle: UIUserInterfaceStyle {

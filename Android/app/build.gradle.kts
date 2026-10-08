@@ -42,8 +42,8 @@ android {
         // Google Play requires targeting within one year of the latest Android
         // release (API 36 from 2026-08-31, and rolling forward each August).
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

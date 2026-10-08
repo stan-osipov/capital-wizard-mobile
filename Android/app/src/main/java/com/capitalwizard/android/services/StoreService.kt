@@ -32,8 +32,9 @@ object StoreService {
     private var pending: Pending? = null
 
     private suspend fun call(body: JSONObject, userId: String): JSONObject {
-        check(currentUserId == userId)
-        val token = auth?.auth?.currentSessionOrNull()?.accessToken ?: error("signed_out")
+        if (currentUserId == null) throw StoreFailure("session_unavailable")
+        if (currentUserId != userId) throw StoreFailure("account_mismatch")
+        val token = auth?.auth?.currentSessionOrNull()?.accessToken ?: throw StoreFailure("session_unavailable")
         val result = withContext(Dispatchers.IO) {
             val connection = URL("https://qzdgdyqsoldkarcshkbi.supabase.co/functions/v1/store-verify").openConnection() as HttpURLConnection
             try {
@@ -45,11 +46,11 @@ object StoreService {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
                 connection.outputStream.use { it.write(body.put("store", "PLAY_STORE").toString().toByteArray(Charsets.UTF_8)) }
-                check(connection.responseCode == 200)
+                if (connection.responseCode != 200) throw StoreFailure.response(connection.responseCode)
                 JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
             } finally { connection.disconnect() }
         }
-        check(currentUserId == userId)
+        if (currentUserId != userId) throw StoreFailure("account_mismatch")
         return result
     }
 
@@ -156,12 +157,17 @@ object StoreService {
         val userId = request.optString("userId")
         val handler = when (event) { "store-products" -> "storeProducts"; "store-purchase" -> "storePurchase"; else -> "storeRestore" }
         fun reply(status: String, extra: JSONObject = JSONObject()) = Reply(handler, JSONObject().apply {
+            if (extra.has("errorCode")) android.util.Log.w("Store", "$event: $status (${extra.optString("errorCode")})")
             put("requestId", requestId); put("userId", userId); put("status", status)
             extra.keys().forEach { put(it, extra.get(it)) }
         })
-        if (requestId.isBlank() || userId.isBlank() || busy || currentUserId != userId) return reply("error")
+        if (busy) return reply("error", JSONObject().put("errorCode", "store_busy"))
+        if (currentUserId == null) return reply("error", JSONObject().put("errorCode", "session_unavailable"))
+        if (requestId.isBlank() || userId.isBlank() || currentUserId != userId)
+            return reply("error", JSONObject().put("errorCode", "account_mismatch"))
         busy = true
         var attempted = false
+        var failureCode = "store_unavailable"
         try {
             val client = connect(activity)
             if (event == "store-restore") {
@@ -174,7 +180,7 @@ object StoreService {
                 return reply(if (uncertain) "pending" else "ok")
             }
             val products = products(client, BillingClient.ProductType.INAPP) + products(client, BillingClient.ProductType.SUBS)
-            check(currentUserId == userId)
+            if (currentUserId != userId) throw StoreFailure("account_mismatch")
             if (event == "store-products") return reply("ok", JSONObject().put("products", JSONArray().apply {
                 products.forEach { product ->
                     val price = if (product.productType == BillingClient.ProductType.SUBS)
@@ -185,26 +191,30 @@ object StoreService {
             }))
             check(event == "store-purchase")
             val id = request.optString("productId")
-            val product = products.firstOrNull { it.productId == id } ?: return reply("error")
-            if (id.startsWith("cw_monthly_") && owned(client, BillingClient.ProductType.SUBS).isNotEmpty()) return reply("error")
+            val product = products.firstOrNull { it.productId == id } ?: return reply("error", JSONObject().put("errorCode", "product_unavailable"))
+            if (id.startsWith("cw_monthly_") && owned(client, BillingClient.ProductType.SUBS).isNotEmpty())
+                return reply("error", JSONObject().put("errorCode", "subscription_active"))
+            failureCode = "server_unavailable"
             val prepared = call(JSONObject().put("action", "prepare"), userId)
-            check(currentUserId == userId)
+            if (currentUserId != userId) throw StoreFailure("account_mismatch")
             val offerToken = if (product.productType == BillingClient.ProductType.SUBS) monthlyOffer(product)?.offerToken else oneTimeOffer(product)?.offerToken
-            if (offerToken == null) return reply("error")
+            if (offerToken == null) return reply("error", JSONObject().put("errorCode", "product_unavailable"))
             val params = BillingFlowParams.newBuilder().setObfuscatedAccountId(prepared.getString("accountToken"))
                 .setProductDetailsParamsList(listOf(BillingFlowParams.ProductDetailsParams.newBuilder()
                     .setProductDetails(product).setOfferToken(offerToken).build())).build()
             val waiting = Pending(userId, id, CompletableDeferred())
             pending = waiting
+            failureCode = "store_unavailable"
             attempted = true
             val launched = client.launchBillingFlow(activity, params)
             if (launched.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) return reply("cancelled")
             if (launched.responseCode != BillingClient.BillingResponseCode.OK) return reply("pending")
             val result = withTimeout(110000) { waiting.result.await() }
-            check(currentUserId == userId)
+            if (currentUserId != userId) throw StoreFailure("account_mismatch")
             return reply(result.getString("status"), result)
-        } catch (_: Exception) {
-            return reply(if (attempted) "pending" else "error")
+        } catch (error: Exception) {
+            val code = (error as? StoreFailure)?.code ?: failureCode
+            return reply(if (attempted) "pending" else "error", JSONObject().put("errorCode", code))
         } finally { pending = null; busy = false }
     }
 }

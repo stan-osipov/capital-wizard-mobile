@@ -70,6 +70,13 @@ and atomically credits the isolated test wallet. Only then does iOS finish the
 transaction or the server acknowledge/consume the Play purchase. Pending results
 retry on launch/restore. The web bridge never receives purchase evidence.
 
+Store failures before checkout now return a stable `errorCode` through the bridge
+for session, access, product, subscription, server and sandbox-verification
+failures. The matching web UI shows the recovery message; older native builds
+continue to use the generic fallback. Logs contain only the operation, outcome
+and fixed code, never session tokens, receipts or server response bodies. Errors
+after a purchase attempt still return `pending`, because a charge may exist.
+
 This is not a billing release. Both stores require real device sandbox testing;
 live settlement and App Store/Google Play production billing remain disabled.
 Build tools and caches installed for this worktree live under ignored `.build/`.

@@ -109,6 +109,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("com.android.billingclient:billing-ktx:8.3.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

@@ -78,6 +78,12 @@ failures. The matching web UI shows the recovery message; older native builds
 continue to use the generic fallback. Logs contain only the operation, outcome
 and fixed code, never session tokens, receipts or server response bodies. Errors
 after a purchase attempt still return `pending`, because a charge may exist.
+Explicit store refusals (such as an account that cannot buy or an unavailable
+product) instead return an actionable error and release checkout. Android logs
+the numeric Play response code for connection, catalog and checkout failures;
+provider messages are not logged. Catalog bridge requests allow 35 seconds for
+Play connection and both product types; wallet HTTP requests time out after 25
+seconds. The shared web UI preserves checkout errors across foreground refreshes.
 
 This is not a billing release. Both stores require real device sandbox testing;
 live settlement and App Store/Google Play production billing remain disabled.

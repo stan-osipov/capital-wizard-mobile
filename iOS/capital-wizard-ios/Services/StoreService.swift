@@ -160,6 +160,9 @@ import Auth
             @unknown default: return reply("pending")
             }
         } catch {
+            if let refusal = StoreFailure.checkoutRejection(error) {
+                return reply("error", ["errorCode":refusal.code])
+            }
             // A transport error may follow a charge. Preserve the unfinished
             // transaction and never invite a second consumable purchase.
             let code = (error as? StoreFailure)?.code ?? failureCode

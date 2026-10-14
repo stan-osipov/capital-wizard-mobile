@@ -31,6 +31,19 @@ object StoreService {
     private data class Pending(val userId: String, val productId: String, val result: CompletableDeferred<JSONObject>)
     private var pending: Pending? = null
 
+    private fun billingFailure(result: BillingResult, operation: String): StoreFailure {
+        // Numeric Play response codes are safe to log; provider messages may
+        // contain account data. The web receives only stable recovery codes.
+        android.util.Log.w("Store", "$operation: Play response ${result.responseCode}")
+        return StoreFailure.billing(result.responseCode)
+    }
+
+    private fun purchaseFailure(result: BillingResult): JSONObject {
+        val failure = billingFailure(result, "checkout")
+        return JSONObject().put("status", if (StoreFailure.isPurchaseRejected(result.responseCode)) "error" else "pending")
+            .put("errorCode", failure.code)
+    }
+
     private suspend fun call(body: JSONObject, userId: String): JSONObject {
         if (currentUserId == null) throw StoreFailure("session_unavailable")
         if (currentUserId != userId) throw StoreFailure("account_mismatch")
@@ -64,7 +77,7 @@ object StoreService {
                     if (result.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
                         waiting?.result?.complete(JSONObject().put("status", "cancelled"))
                     } else if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                        waiting?.result?.complete(JSONObject().put("status", "pending"))
+                        waiting?.result?.complete(purchaseFailure(result))
                     } else {
                         for (purchase in purchases.orEmpty()) {
                             val userId = currentUserId ?: continue
@@ -80,7 +93,7 @@ object StoreService {
                     override fun onBillingSetupFinished(result: BillingResult) {
                         if (!continuation.isActive) return
                         if (result.responseCode == BillingClient.BillingResponseCode.OK) continuation.resume(Unit)
-                        else continuation.resumeWithException(IllegalStateException("billing_unavailable"))
+                        else continuation.resumeWithException(billingFailure(result, "connect"))
                     }
                     override fun onBillingServiceDisconnected() { /* Auto-reconnect on the next request. */ }
                 })
@@ -90,8 +103,8 @@ object StoreService {
     }
 
     private suspend fun owned(client: BillingClient, type: String): List<Purchase> {
-        val result = client.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(type).build())
-        check(result.billingResult.responseCode == BillingClient.BillingResponseCode.OK)
+        val result = withTimeout(10000) { client.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(type).build()) }
+        if (result.billingResult.responseCode != BillingClient.BillingResponseCode.OK) throw billingFailure(result.billingResult, "owned-$type")
         return result.purchasesList
     }
 
@@ -105,7 +118,7 @@ object StoreService {
                 client.queryProductDetailsAsync(params) { result, details ->
                     if (continuation.isActive) {
                         if (result.responseCode == BillingClient.BillingResponseCode.OK) continuation.resume(details.productDetailsList)
-                        else continuation.resumeWithException(IllegalStateException("products_unavailable"))
+                        else continuation.resumeWithException(billingFailure(result, "products-$type"))
                     }
                 }
             }
@@ -212,7 +225,10 @@ object StoreService {
             attempted = true
             val launched = client.launchBillingFlow(activity, params)
             if (launched.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) return reply("cancelled")
-            if (launched.responseCode != BillingClient.BillingResponseCode.OK) return reply("pending")
+            if (launched.responseCode != BillingClient.BillingResponseCode.OK) {
+                val result = purchaseFailure(launched)
+                return reply(result.getString("status"), result)
+            }
             val result = withTimeout(110000) { waiting.result.await() }
             if (currentUserId != userId) throw StoreFailure("account_mismatch")
             return reply(result.getString("status"), result)

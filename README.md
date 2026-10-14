@@ -85,6 +85,13 @@ provider messages are not logged. Catalog bridge requests allow 35 seconds for
 Play connection and both product types; wallet HTTP requests time out after 25
 seconds. The shared web UI preserves checkout errors across foreground refreshes.
 
+If a purchase is already completed by the store but verification fails or times
+out, both shells retain its transaction ID in the pending reply. This is only a
+lookup hint: the web checks the authenticated owner's server ledger before it
+shows success or allows another purchase. This also handles a store notification
+settling the purchase before the phone receives confirmation. Android logs HTTP
+status, acceptance and whether a reply has an ID, never the token or ID itself.
+
 This is not a billing release. Both stores require real device sandbox testing;
 live settlement and App Store/Google Play production billing remain disabled.
 Build tools and caches installed for this worktree live under ignored `.build/`.

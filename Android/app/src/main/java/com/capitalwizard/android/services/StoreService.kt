@@ -59,7 +59,9 @@ object StoreService {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
                 connection.outputStream.use { it.write(body.put("store", "PLAY_STORE").toString().toByteArray(Charsets.UTF_8)) }
-                if (connection.responseCode != 200) throw StoreFailure.response(connection.responseCode)
+                val status = connection.responseCode
+                android.util.Log.i("Store", "verify-${body.optString("action")}: HTTP $status")
+                if (status != 200) throw StoreFailure.response(status)
                 JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
             } finally { connection.disconnect() }
         }
@@ -81,7 +83,13 @@ object StoreService {
                     } else {
                         for (purchase in purchases.orEmpty()) {
                             val userId = currentUserId ?: continue
-                            val response = try { submit(purchase, userId) } catch (_: Exception) { JSONObject().put("status", "pending") }
+                            val response = try { submit(purchase, userId) } catch (error: Exception) {
+                                // A webhook can already have credited/consumed the purchase.
+                                // Keep its ID so the web can ask the ledger independently.
+                                val code = (error as? StoreFailure)?.code ?: "server_unavailable"
+                                android.util.Log.w("Store", "verification pending: $code (${error.javaClass.simpleName})")
+                                pendingPurchase(purchase, userId).put("errorCode", code)
+                            }
                             if (waiting?.userId == userId && waiting.productId in purchase.products) waiting.result.complete(response)
                         }
                     }
@@ -137,9 +145,18 @@ object StoreService {
         check(purchase.products.size == 1 && purchase.products[0] in productIds)
         val response = call(JSONObject().put("action", "verify").put("purchaseToken", purchase.purchaseToken)
             .put("monthly", purchase.products[0].startsWith("cw_monthly_")), userId)
+        android.util.Log.i("Store", "verification accepted=${response.optBoolean("accepted")}")
         // Server consumes or acknowledges only AFTER its atomic ledger write.
         return if (response.optBoolean("accepted")) JSONObject().put("status", "ok").put("transactionId", response.getString("transactionId"))
-            else JSONObject().put("status", "pending")
+            else pendingPurchase(purchase, userId)
+    }
+
+    private fun pendingPurchase(purchase: Purchase, userId: String): JSONObject = JSONObject().put("status", "pending").apply {
+        // The ID is only a lookup hint, never proof of payment. wallet-payments
+        // checks the authenticated owner and the durable ledger before unlocking.
+        if (currentUserId == userId && purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+            purchase.orderId?.takeIf { it.isNotBlank() && it.length <= 255 }?.let { put("transactionId", it) }
+        }
     }
 
     /** Retry unconsumed purchases on startup. Paid pending transactions are also
@@ -170,6 +187,7 @@ object StoreService {
         val userId = request.optString("userId")
         val handler = when (event) { "store-products" -> "storeProducts"; "store-purchase" -> "storePurchase"; else -> "storeRestore" }
         fun reply(status: String, extra: JSONObject = JSONObject()) = Reply(handler, JSONObject().apply {
+            android.util.Log.i("Store", "$event: $status, transaction=${extra.has("transactionId")}")
             if (extra.has("errorCode")) android.util.Log.w("Store", "$event: $status (${extra.optString("errorCode")})")
             put("requestId", requestId); put("userId", userId); put("status", status)
             extra.keys().forEach { put(it, extra.get(it)) }

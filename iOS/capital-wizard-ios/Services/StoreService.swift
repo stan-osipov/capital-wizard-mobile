@@ -109,6 +109,7 @@ import Auth
         busy = true
         defer { busy = false }
         var purchaseAttempted = false
+        var pendingTransactionId: String?
         var failureCode = "store_unavailable"
         do {
             if event == "store-restore" {
@@ -155,7 +156,16 @@ import Auth
             case .userCancelled: return reply("cancelled")
             case .pending: return reply("pending")
             case .success(let result):
-                guard let transactionId = try await submit(result) else { return reply("pending") }
+                // Mirror Android: retain a lookup hint if server verification
+                // times out after the notification already credited the wallet.
+                // The web still requires an owner-scoped paid ledger record.
+                if case .verified(let transaction) = result,
+                   transaction.appAccountToken?.uuidString.lowercased() == userId {
+                    pendingTransactionId = String(transaction.id)
+                }
+                guard let transactionId = try await submit(result) else {
+                    return reply("pending", pendingTransactionId.map { ["transactionId":$0] } ?? [:])
+                }
                 return reply("ok",["transactionId":transactionId])
             @unknown default: return reply("pending")
             }
@@ -166,7 +176,9 @@ import Auth
             // A transport error may follow a charge. Preserve the unfinished
             // transaction and never invite a second consumable purchase.
             let code = (error as? StoreFailure)?.code ?? failureCode
-            return reply(purchaseAttempted ? "pending" : "error", ["errorCode":code])
+            var details = ["errorCode":code]
+            if currentUserId == userId, let pendingTransactionId { details["transactionId"] = pendingTransactionId }
+            return reply(purchaseAttempted ? "pending" : "error", details)
         }
     }
 }

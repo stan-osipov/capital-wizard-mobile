@@ -18,10 +18,9 @@ import kotlin.coroutines.resumeWithException
 object StoreService {
     val productIds = listOf("cw_credit_10", "cw_credit_20", "cw_credit_50", "cw_credit_100",
         "cw_monthly_10", "cw_monthly_25", "cw_monthly_50")
-    // Unlike TestFlight, Play test tracks do not guarantee sandbox payments:
-    // only license testers get test cards. Keep Android release billing off
-    // until its separate Play setup and device verification are complete.
-    val available: Boolean get() = BuildConfig.DEBUG && com.capitalwizard.android.utils.AppProduct.supportsStoreBilling
+    // Google one-time purchases are verified into live or sandbox wallets by the
+    // backend. Apple retains its separate TestFlight-only rollout gate.
+    val available: Boolean get() = com.capitalwizard.android.utils.AppProduct.supportsStoreBilling
     private var busy = false
     private var billing: BillingClient? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -211,7 +210,8 @@ object StoreService {
                 }
                 return reply(if (uncertain) "pending" else "ok")
             }
-            val products = products(client, BillingClient.ProductType.INAPP) + products(client, BillingClient.ProductType.SUBS)
+            val products = products(client, BillingClient.ProductType.INAPP) +
+                (if (BuildConfig.DEBUG) products(client, BillingClient.ProductType.SUBS) else emptyList())
             if (currentUserId != userId) throw StoreFailure("account_mismatch")
             if (event == "store-products") return reply("ok", JSONObject().put("products", JSONArray().apply {
                 products.forEach { product ->
@@ -227,12 +227,11 @@ object StoreService {
             if (id.startsWith("cw_monthly_") && owned(client, BillingClient.ProductType.SUBS).isNotEmpty())
                 return reply("error", JSONObject().put("errorCode", "subscription_active"))
             failureCode = "server_unavailable"
-            val prepared = call(JSONObject().put("action", "prepare"), userId)
+            val prepared = call(JSONObject().put("action", "prepare").put("productId", id), userId)
             if (currentUserId != userId) throw StoreFailure("account_mismatch")
             val offerToken = if (product.productType == BillingClient.ProductType.SUBS) monthlyOffer(product)?.offerToken else oneTimeOffer(product)?.offerToken
             if (offerToken == null) return reply("error", JSONObject().put("errorCode", "product_unavailable"))
-            // Mirror the final iOS sandbox gate. Play has no TestFlight receipt;
-            // this platform remains Debug-only until license testing is ready.
+            // Recheck product availability immediately before opening Play.
             if (!available) throw StoreFailure("payments_unavailable")
             val params = BillingFlowParams.newBuilder().setObfuscatedAccountId(prepared.getString("accountToken"))
                 .setProductDetailsParamsList(listOf(BillingFlowParams.ProductDetailsParams.newBuilder()

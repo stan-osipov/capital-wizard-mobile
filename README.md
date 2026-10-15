@@ -43,32 +43,35 @@ and verification configuration belong to Capital Wizard. Apple/Google sign-in,
 signed-in project navigation, and push delivery still need a real user/device
 smoke test before a public App Store release.
 
-## Direct mobile wallet sandbox integration
+## Direct mobile wallet integration
 
 Both shells include matching `StoreService` implementations: system StoreKit on
 iOS and Google Play Billing 8.3.0 on Android. RevenueCat is not used. Catalog,
 console setup, server verification, rollout limits and device tests are documented
 in `../capital-wizard/docs/mobile-wallet-payments.md`.
 
-Purchases require a signed-in Capital Wizard administrator. iOS supports Debug
+Apple sandbox purchases require a signed-in Capital Wizard administrator. iOS supports Debug
 builds and TestFlight: a sandbox receipt enables the bridge and is checked again
 with the server account binding immediately before checkout. The app-download
 `AppTransaction` is not a prerequisite for in-app purchases; it can be unavailable
 or unverified independently of the purchase being requested. Missing/production
 receipts keep Release billing unavailable. Every iOS
 purchase must be a verified sandbox transaction before it is sent to the server.
-Android remains Debug-only: Play test tracks can charge real money for users who
-are not license testers, unlike TestFlight. Its release gate stays closed until
-the Google setup and device tests are complete.
+Android 1.4 (5) enables Google Play one-time credit purchases in Release for
+Capital Wizard. Debug still supports subscription testing; Release only queries
+one-time products. Coding Lab excludes billing. The server opens public checkout
+with `WALLET_GOOGLE_LIVE_ENABLED`; Google-verified test purchases remain isolated
+from the real wallet, including license testers using a production build.
+Apple production stays gated because it has a separate release/test process.
 
-The server must be configured and the corresponding sandbox gate enabled before
+The server must be configured and the corresponding sales gate enabled before
 opening a purchase sheet. No store API keys or service-account credentials belong
 in these native builds. These TestFlight instructions supersede the older
 Debug-only iOS restriction in the web repository's mobile billing document.
 
 The native layer sends purchase evidence straight to `store-verify` using its
 Supabase session. The server validates the store, account and paid transaction,
-and atomically credits the isolated test wallet. Only then does iOS finish the
+and atomically credits the appropriate live or isolated test wallet. Only then does iOS finish the
 transaction or the server acknowledge/consume the Play purchase. Pending results
 retry on launch/restore. The web bridge never receives purchase evidence.
 

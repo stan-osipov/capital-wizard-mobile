@@ -14,6 +14,8 @@ import Auth
         return false
         #endif
     }
+    // Android supports live top-ups and monthly funding; Apple production needs
+    // its own receipt/history rollout, so StoreKit remains Debug/TestFlight only.
     static var available: Bool {
         StoreBillingPolicy.isAvailable(isDebugBuild: isDebugBuild,
             receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent)

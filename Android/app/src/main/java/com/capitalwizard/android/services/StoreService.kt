@@ -18,7 +18,7 @@ import kotlin.coroutines.resumeWithException
 object StoreService {
     val productIds = listOf("cw_credit_10", "cw_credit_20", "cw_credit_50", "cw_credit_100",
         "cw_monthly_10", "cw_monthly_25", "cw_monthly_50")
-    // Google one-time purchases are verified into live or sandbox wallets by the
+    // Google top-ups and monthly purchases are verified into live or sandbox wallets by the
     // backend. Apple retains its separate TestFlight-only rollout gate.
     val available: Boolean get() = com.capitalwizard.android.utils.AppProduct.supportsStoreBilling
     private var busy = false
@@ -211,7 +211,7 @@ object StoreService {
                 return reply(if (uncertain) "pending" else "ok")
             }
             val products = products(client, BillingClient.ProductType.INAPP) +
-                (if (BuildConfig.DEBUG) products(client, BillingClient.ProductType.SUBS) else emptyList())
+                products(client, BillingClient.ProductType.SUBS)
             if (currentUserId != userId) throw StoreFailure("account_mismatch")
             if (event == "store-products") return reply("ok", JSONObject().put("products", JSONArray().apply {
                 products.forEach { product ->

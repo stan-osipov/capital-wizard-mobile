@@ -57,10 +57,11 @@ with the server account binding immediately before checkout. The app-download
 or unverified independently of the purchase being requested. Missing/production
 receipts keep Release billing unavailable. Every iOS
 purchase must be a verified sandbox transaction before it is sent to the server.
-Android 1.4 (5) enables Google Play one-time credit purchases in Release for
-Capital Wizard. Debug still supports subscription testing; Release only queries
-one-time products. Coding Lab excludes billing. The server opens public checkout
-with `WALLET_GOOGLE_LIVE_ENABLED`; Google-verified test purchases remain isolated
+Android 1.5 (6) enables Google Play one-time credit purchases and monthly wallet
+funding in Release for Capital Wizard. Each successful monthly charge adds the
+plan’s USD credit; cancellation leaves purchased credit intact. Coding Lab excludes billing. The server opens public checkout
+with `WALLET_GOOGLE_LIVE_ENABLED` and monthly plans with
+`WALLET_GOOGLE_SUBSCRIPTIONS_ENABLED`; Google-verified test purchases remain isolated
 from the real wallet, including license testers using a production build.
 Apple production stays gated because it has a separate release/test process.
 

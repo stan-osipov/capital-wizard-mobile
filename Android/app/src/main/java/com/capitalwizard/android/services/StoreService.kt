@@ -16,6 +16,7 @@ import kotlin.coroutines.resumeWithException
 
 /** Mirrors iOS StoreService. Only server verification can credit the wallet. */
 object StoreService {
+    // Google Play keeps cw_monthly_50; only App Store Connect uses cw_monthly_50b.
     val productIds = listOf("cw_credit_10", "cw_credit_20", "cw_credit_50", "cw_credit_100",
         "cw_monthly_10", "cw_monthly_25", "cw_monthly_50")
     // Google top-ups and monthly purchases are verified into live or sandbox wallets by the

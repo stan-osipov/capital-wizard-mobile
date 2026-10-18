@@ -5,8 +5,9 @@ import Auth
 /// Mirrors Android StoreService. Only server verification can credit the wallet.
 @MainActor final class StoreService {
     static let shared = StoreService()
+    // App Store Connect replaced the $50 SKU; Google Play keeps cw_monthly_50.
     static let productIds = ["cw_credit_10", "cw_credit_20", "cw_credit_50", "cw_credit_100",
-                             "cw_monthly_10", "cw_monthly_25", "cw_monthly_50"]
+                             "cw_monthly_10", "cw_monthly_25", "cw_monthly_50b"]
     private static var isDebugBuild: Bool {
         #if DEBUG
         return true
@@ -78,7 +79,7 @@ import Auth
         guard transaction.environment == .sandbox else { throw StoreFailure(code: "sandbox_required") }
         guard let userId = currentUserId else { throw StoreFailure(code: "session_unavailable") }
         guard transaction.appAccountToken?.uuidString.lowercased() == userId else { throw StoreFailure(code: "account_mismatch") }
-        guard Self.productIds.contains(transaction.productID) else { throw StoreFailure(code: "product_unavailable") }
+        guard Self.productIds.contains(transaction.productID) || transaction.productID == "cw_monthly_50" else { throw StoreFailure(code: "product_unavailable") }
         let response = try await call(["action":"verify", "signedTransaction":result.jwsRepresentation], userId:userId)
         guard response["accepted"] as? Bool == true else { return nil }
         await transaction.finish()

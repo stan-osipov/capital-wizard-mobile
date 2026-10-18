@@ -15,8 +15,8 @@ import Auth
         return false
         #endif
     }
-    // Android supports live top-ups and monthly funding; Apple production needs
-    // its own receipt/history rollout, so StoreKit remains Debug/TestFlight only.
+    // Both shells expose billing. Sales gates and authenticated store evidence
+    // decide availability and whether a purchase grants sandbox or real credit.
     static var available: Bool {
         StoreBillingPolicy.isAvailable(isDebugBuild: isDebugBuild,
             receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent)
@@ -76,7 +76,9 @@ import Auth
 
     private func submit(_ result: VerificationResult<StoreKit.Transaction>) async throws -> String? {
         guard case .verified(let transaction) = result else { throw StoreFailure(code: "store_unavailable") }
-        guard transaction.environment == .sandbox else { throw StoreFailure(code: "sandbox_required") }
+        guard transaction.environment == .sandbox || transaction.environment == .production else {
+            throw StoreFailure(code: "store_unavailable") // Never settle Xcode/local-test purchases.
+        }
         guard let userId = currentUserId else { throw StoreFailure(code: "session_unavailable") }
         guard transaction.appAccountToken?.uuidString.lowercased() == userId else { throw StoreFailure(code: "account_mismatch") }
         guard Self.productIds.contains(transaction.productID) || transaction.productID == "cw_monthly_50" else { throw StoreFailure(code: "product_unavailable") }
@@ -142,13 +144,12 @@ import Auth
                 }
             }
             failureCode = "server_unavailable"
-            let prepared = try await call(["action":"prepare"],userId:userId)
+            let prepared = try await call(["action":"prepare", "productId":id],userId:userId)
             guard currentUserId == userId else { return reply("error", ["errorCode":"account_mismatch"]) }
-            // TestFlight purchases use sandbox; recheck the system receipt.
             // AppTransaction describes the app download, not this IAP: an absent
             // or unverified download record must not block StoreKit's own sheet.
             // submit() and the server still verify the actual purchase signature,
-            // sandbox environment, product and account before granting credit.
+            // environment, product and account before granting credit.
             try StoreBillingPolicy.validateCheckout(isDebugBuild: Self.isDebugBuild,
                 receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent,
                 accountToken: prepared["accountToken"] as? String, userId: userId)

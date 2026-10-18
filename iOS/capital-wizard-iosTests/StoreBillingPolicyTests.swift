@@ -6,13 +6,13 @@ struct StoreBillingPolicyTests {
         #expect(StoreBillingPolicy.isAvailable(isDebugBuild: false, receiptName: "sandboxReceipt"))
     }
 
-    @Test func appStoreReleaseDoesNotAdvertiseBilling() {
-        #expect(!StoreBillingPolicy.isAvailable(isDebugBuild: false, receiptName: "receipt"))
+    @Test func appStoreReleaseAdvertisesBilling() {
+        #expect(StoreBillingPolicy.isAvailable(isDebugBuild: false, receiptName: "receipt"))
     }
 
-    @Test func missingOrUnknownReleaseReceiptFailsClosed() {
+    @Test func availabilityDoesNotDependOnTheAppDownloadReceipt() {
         for receipt: String? in [nil, "", "SandboxReceipt", "sandboxReceipt.backup", "receipt/sandboxReceipt"] {
-            #expect(!StoreBillingPolicy.isAvailable(isDebugBuild: false, receiptName: receipt))
+            #expect(StoreBillingPolicy.isAvailable(isDebugBuild: false, receiptName: receipt))
         }
     }
 
@@ -24,12 +24,12 @@ struct StoreBillingPolicyTests {
             accountToken: "user", userId: "user")
     }
 
-    @Test func checkoutRechecksTheReceiptRatherThanTrustingTheEarlierBridgeHint() {
-        for receipt: String? in [nil, "receipt", ""] {
-            #expect(throws: StoreFailure.self) {
-                try StoreBillingPolicy.validateCheckout(isDebugBuild: false, receiptName: receipt,
-                    accountToken: "user", userId: "user")
-            }
+    @Test func productionCheckoutRequiresTheServerAccountBinding() throws {
+        try StoreBillingPolicy.validateCheckout(isDebugBuild: false, receiptName: "receipt",
+            accountToken: "user", userId: "user")
+        #expect(throws: StoreFailure.self) {
+            try StoreBillingPolicy.validateCheckout(isDebugBuild: false, receiptName: "receipt",
+                accountToken: nil, userId: "user")
         }
     }
 

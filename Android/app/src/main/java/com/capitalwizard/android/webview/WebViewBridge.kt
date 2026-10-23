@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.capitalwizard.android.services.StoreService
@@ -130,7 +132,7 @@ class WebViewBridge {
         // to unknown, never to a wrong answer" rule `idiom` and `endpoint`
         // follow. Mirrors the iOS shell's `mic: true`.
         return """
-            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true, store: ${StoreService.available} };
+            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true, haptics: true, store: ${StoreService.available} };
             document.documentElement.classList.add('cw-native-android');
         """.trimIndent()
     }
@@ -484,6 +486,24 @@ class WebViewBridge {
 
     private fun parseSystemMessage(json: JSONObject) {
         val eventName = json.optString("eventName")
+        // Button preference is applied by the web; refresh always reaches here.
+        // Android bridge callbacks run off the UI thread. Use View feedback,
+        // which needs no vibration permission and respects the OS preference.
+        if (eventName == "haptic") {
+            val kind = json.optString("kind")
+            if (kind != "button" && kind != "refresh") return
+            val view = webView ?: return
+            view.post {
+                if (webView !== view || Uri.parse(view.url ?: "").host != Uri.parse(baseUrl(view.context)).host) return@post
+                val feedback = if (kind == "refresh") {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM
+                    else HapticFeedbackConstants.LONG_PRESS
+                } else HapticFeedbackConstants.CONTEXT_CLICK
+                view.performHapticFeedback(feedback)
+            }
+            return
+        }
+
         CWLog.log("Bridge system event: $eventName", category = "Bridge")
 
         when (eventName) {

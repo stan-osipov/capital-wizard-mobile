@@ -144,3 +144,16 @@ confirm upload success and App Store Connect processing before inviting testing.
 
 References: [Apple TestFlight purchases](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testing-subscriptions-and-in-app-purchases-in-testflight/),
 [signed app transaction](https://developer.apple.com/documentation/storekit/apptransaction).
+
+## Haptic feedback from the web app
+
+Both shells advertise `haptics: true` in `window.__capital_wizard_native` and
+handle `{ type: "system", eventName: "haptic", kind: "button" | "refresh" }`.
+Buttons use light feedback; a committed Home refresh uses a stronger pulse.
+The web app persists the button toggle through the existing device key-value
+store. Turning it off does not suppress refresh feedback. Platform feedback
+still respects device support and OS settings.
+
+This bridge requires an updated native build; older shells use the web app's
+browser vibration fallback where supported. Verify the physical feel on a
+phone before a native release; simulator tests cannot verify the actuator.

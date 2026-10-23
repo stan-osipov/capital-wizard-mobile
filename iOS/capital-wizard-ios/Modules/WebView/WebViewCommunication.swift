@@ -35,6 +35,9 @@ class WebViewCommunication: NSObject {
         }
     }
     
+    private let buttonFeedback = UIImpactFeedbackGenerator(style: .light)
+    private let refreshFeedback = UIImpactFeedbackGenerator(style: .medium)
+
     private var didFinalizeLoad: Bool = false
     
     var isReady: Bool {
@@ -287,6 +290,19 @@ extension WebViewCommunication: WKScriptMessageHandler {
 
     private func parseSystemResponse(_ dict: Dictionary<String, Any>) {
         guard let eventName = dict["eventName"] as? String else {
+            return
+        }
+
+        // Button preference is applied by the web; refresh always reaches here.
+        // Run UIKit feedback on the main thread and only for our current page.
+        if eventName == "haptic" {
+            guard let kind = dict["kind"] as? String,
+                  kind == "button" || kind == "refresh" else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let view = self.wkWebView,
+                      view.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
+                (kind == "refresh" ? self.refreshFeedback : self.buttonFeedback).impactOccurred()
+            }
             return
         }
 

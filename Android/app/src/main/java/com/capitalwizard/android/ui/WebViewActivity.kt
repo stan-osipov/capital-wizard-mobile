@@ -140,6 +140,9 @@ class WebViewActivity : AppCompatActivity() {
     private var documentStartInstalled = false
 
     private val onLogoutCallback = EventCallback<Unit> { navigateToLogin() }
+    private val onLoaderReadyCallback = EventCallback<Unit> {
+        runOnUiThread { revealWebView() }
+    }
     private val onAppReadyCallback = EventCallback<Unit> {
         runOnUiThread {
             revealWebView()
@@ -251,6 +254,7 @@ class WebViewActivity : AppCompatActivity() {
         pushService?.onExternalUrl?.subscribe(onExternalUrlCallback)
 
         bridge = WebViewBridge()
+        bridge.onLoaderReady += onLoaderReadyCallback
         bridge.onAppReady += onAppReadyCallback
         bridge.onEndpointChanged += onEndpointChangedCallback
 
@@ -614,6 +618,15 @@ class WebViewActivity : AppCompatActivity() {
         SplashStatus.bind(null)
         SplashStatus.reset()
 
+        // The web flask is already painted at the same size, position and clock
+        // phase. This event only transfers the loading surface; app-ready still
+        // owns billing/push work. No scaling, fade or animation restart.
+        if (com.capitalwizard.android.utils.AppProduct.isCodingLab) {
+            webView.alpha = 1f
+            splashView.visibility = View.GONE
+            return
+        }
+
         // A pure CROSSFADE. This used to scale the splash up to 1.08 while the
         // WebView came in from 0.96 — two simultaneous size changes, which is
         // what read as the mark jumping just before the app appeared. Nothing
@@ -821,6 +834,7 @@ class WebViewActivity : AppCompatActivity() {
         pushService?.onRegistration?.unsubscribe(onPushRegistrationCallback)
         pushService?.onOpenRecorded?.unsubscribe(onOpenRecordedCallback)
         pushService?.onExternalUrl?.unsubscribe(onExternalUrlCallback)
+        bridge.onLoaderReady -= onLoaderReadyCallback
         bridge.onAppReady -= onAppReadyCallback
         bridge.webView = null
         webView.destroy()

@@ -43,6 +43,7 @@ class SplashAnimationView: UIView {
 
     // MARK: - Layer / view references
 
+    private var codingLabSplash: CodingLabSplashView?
     private let markContainer = UIView()
     private let trackLayer = CAShapeLayer()
     private let lineLayer  = CAShapeLayer()
@@ -142,6 +143,14 @@ class SplashAnimationView: UIView {
     // MARK: - Build views (no animations here)
 
     private func buildUI() {
+        if AppProduct.current == .codingLab {
+            let splash = CodingLabSplashView()
+            splash.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            splash.frame = bounds
+            addSubview(splash)
+            codingLabSplash = splash
+            return
+        }
         backgroundColor = colors.dsBackground
 
         // ── Mark container (130pt box, centered, lifted to leave room for the
@@ -302,7 +311,7 @@ class SplashAnimationView: UIView {
     /// lifecycle callback (re-layout / re-attach / a launch-time foreground
     /// event) from wiping the partial first cycle and restarting it.
     private func startDrawIfNeeded() {
-        guard !stopped, !didStartDraw, window != nil, markContainer.bounds.width > 0 else { return }
+        guard codingLabSplash == nil, !stopped, !didStartDraw, window != nil, markContainer.bounds.width > 0 else { return }
         didStartDraw = true
         applyAnimations()
     }
@@ -312,6 +321,7 @@ class SplashAnimationView: UIView {
     /// Applies every directly-set color from the resolved palette. Safe to call
     /// repeatedly (initial build, window attach, and live appearance changes).
     private func applyThemeColors() {
+        guard codingLabSplash == nil else { return }
         let colors = self.colors
         backgroundColor = colors.dsBackground
 
@@ -343,6 +353,7 @@ class SplashAnimationView: UIView {
     // MARK: - Apply animations (called when in window hierarchy)
 
     private func applyAnimations() {
+        guard codingLabSplash == nil else { return }
         lineLayer.removeAllAnimations()
 
         // Reduced motion: show the completed accent W, no draw loop, static "…".
@@ -408,6 +419,7 @@ class SplashAnimationView: UIView {
 
     func stopAllAnimations() {
         stopped = true
+        codingLabSplash?.stopAnimating()
         dotsTimer?.invalidate()
         dotsTimer = nil
         NotificationCenter.default.removeObserver(self)

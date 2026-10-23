@@ -34,11 +34,11 @@ object AccentColors {
      * The accent colour for the current accent id + scheme. Mirrors the web
      * `ACCENT_PROFILE` accent channel; dark-soft collapses to dark natively.
      */
-    fun accent(context: Context, isDark: Boolean): Int {
+    fun accent(context: Context, isDark: Boolean, soft: Boolean = false): Int {
         val id = ThemePrefs.getWebAccent(context)?.takeIf { swatches.containsKey(it) } ?: "amber"
         val (hue, chromaOverride) = swatches.getValue(id)
-        val l = if (isDark) 0.68 else 0.62
-        val c = chromaOverride ?: if (isDark) 0.16 else 0.17
+        val l = if (soft) 0.72 else if (isDark) 0.68 else 0.62
+        val c = chromaOverride ?: if (soft) 0.14 else if (isDark) 0.16 else 0.17
         return oklchToColor(l, c, hue)
     }
 

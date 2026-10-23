@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Both launch and WebView activities use this same full-screen flask. Hidden
+     legacy caption IDs preserve the shared view binding without showing technical
+     startup steps or the Capital Wizard wordmark/dots. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:clickable="true" android:focusable="true">
+    <com.capitalwizard.android.ui.CodingLabSplashView
+        android:layout_width="match_parent" android:layout_height="match_parent" />
+    <com.capitalwizard.android.ui.SplashWView android:id="@+id/splash_mark"
+        android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+    <TextView android:id="@+id/splash_wordmark" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+    <TextView android:id="@+id/splash_status" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+    <TextView android:id="@+id/splash_dots" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+</FrameLayout>

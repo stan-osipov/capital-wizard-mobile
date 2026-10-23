@@ -260,11 +260,11 @@ struct AppColors {
     /// web instead of the fixed amber brand. Reads the accent id the WebView
     /// last reported (`cw_web_accent`), defaulting to amber. Mirrors the web
     /// `ACCENT_PROFILE` accent channel; dark-soft collapses to dark natively.
-    static func webAccent(isDark: Bool) -> (accent: UIColor, soft: UIColor) {
+    static func webAccent(isDark: Bool, soft: Bool = false) -> (accent: UIColor, soft: UIColor) {
         let id = UserDefaults.standard.string(forKey: WindowsServiceConst.webAccentKey) ?? "amber"
         let sw = accentSwatches[id] ?? accentSwatches["amber"]!
-        let l: CGFloat = isDark ? 0.68 : 0.62
-        let c: CGFloat = sw.chroma ?? (isDark ? 0.16 : 0.17)
+        let l: CGFloat = soft ? 0.72 : isDark ? 0.68 : 0.62
+        let c: CGFloat = sw.chroma ?? (soft ? 0.14 : isDark ? 0.16 : 0.17)
         let accent = UIColor(oklchL: l, chroma: c, hueDegrees: sw.hue)
         // Soft glow = the accent hue at low alpha (matches the prior amber glow
         // model: dsAccentSoft used 0.20 dark / 0.16 light).

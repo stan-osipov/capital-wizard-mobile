@@ -62,6 +62,7 @@ class WebViewApplication: NSObject, Application {
     lazy var pushService:          PushService?          = ServiceManager.shared.getService()
 
     private lazy var onColorChangeHandler: EventCallback = EventCallback(onColorSchemeChanged(_:))
+    private lazy var onLoaderReadyHandler: EventCallback = EventCallback(onLoaderReady)
     private lazy var onAppReadyHandler:    EventCallback = EventCallback(onAppReady)
     private lazy var onEndpointChangedHandler: EventCallback = EventCallback(onEndpointChanged)
     private lazy var onDeepLinkHandler:    EventCallback = EventCallback(onDeepLink(_:))
@@ -96,6 +97,7 @@ class WebViewApplication: NSObject, Application {
     
     func start() {
         windowsService?.onColorSchemeChanged += onColorChangeHandler
+        webViewCommunication.onLoaderReady += onLoaderReadyHandler
         webViewCommunication.onAppReady += onAppReadyHandler
         webViewCommunication.onEndpointChanged += onEndpointChangedHandler
         deepLinkService?.onDeepLink += onDeepLinkHandler
@@ -202,6 +204,12 @@ class WebViewApplication: NSObject, Application {
         }
     }
 
+    private func onLoaderReady() {
+        DispatchQueue.main.async { [weak self] in
+            self?.webViewController?.handoffToWebLoader()
+        }
+    }
+
     private func onAppReady() {
         CWLog.shared.log("Web app reported ready — revealing WebView", category: "WebView")
 
@@ -229,6 +237,7 @@ class WebViewApplication: NSObject, Application {
         }
         
         windowsService?.onColorSchemeChanged -= onColorChangeHandler
+        webViewCommunication.onLoaderReady -= onLoaderReadyHandler
         webViewCommunication.onAppReady -= onAppReadyHandler
         webViewCommunication.onEndpointChanged -= onEndpointChangedHandler
         deepLinkService?.onDeepLink -= onDeepLinkHandler

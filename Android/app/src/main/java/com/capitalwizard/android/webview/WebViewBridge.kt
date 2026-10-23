@@ -30,6 +30,7 @@ import org.json.JSONObject
 class WebViewBridge {
 
     val onAppReady = Event<Unit>()
+    val onLoaderReady = Event<Unit>()
 
     /**
      * Fires only when a `set-endpoint` actually MOVED the shell to the other
@@ -508,6 +509,9 @@ class WebViewBridge {
 
         when (eventName) {
             "api-ready" -> finalizeLoad()
+            "loader-ready" -> {
+                if (com.capitalwizard.android.utils.AppProduct.isCodingLab) onLoaderReady.invoke(Unit)
+            }
             "app-ready" -> {
                 onAppReady.invoke(Unit)
                 webView?.post {

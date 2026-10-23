@@ -18,6 +18,7 @@ struct WebApiError: Error, ErrorMessage {
 class WebViewCommunication: NSObject {
     var contentController: WKUserContentController
     var onAppReady: Event<Void> = Event()
+    var onLoaderReady: Event<Void> = Event()
     /// Fires only when a `set-endpoint` actually MOVED the shell to the other
     /// site; the owning application answers by restarting the web layer.
     var onEndpointChanged: Event<Void> = Event()
@@ -324,6 +325,10 @@ extension WebViewCommunication: WKScriptMessageHandler {
 
         if eventName == "api-ready" {
             finilizeLoad()
+        }
+
+        if eventName == "loader-ready", AppProduct.current == .codingLab {
+            onLoaderReady.invoke(())
         }
 
         if eventName == "app-ready" {

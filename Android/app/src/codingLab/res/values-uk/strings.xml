@@ -5,7 +5,7 @@
     <string name="login_title">Вітаємо в Coding Lab</string>
     <string name="login_subtitle">Увійдіть, щоб відкрити проєкти, розмови та машини.</string>
     <string name="signup_subtitle">Створюйте з ШІ. Проєкти та машини — в одному місці.</string>
-    <string name="loader_caption">Готуємо робочий простір</string>
+    <string name="loader_caption">Підготовка застосунків</string>
     <string name="terms_url">https://app.coding-lab.co/terms</string>
     <string name="privacy_url">https://app.coding-lab.co/privacy</string>
     <string name="push_channel_description">Нагадування та оновлення від Coding Lab</string>

@@ -157,3 +157,24 @@ still respects device support and OS settings.
 This bridge requires an updated native build; older shells use the web app's
 browser vibration fallback where supported. Verify the physical feel on a
 phone before a native release; simulator tests cannot verify the actuator.
+
+## Coding Lab loader handoff
+
+Coding Lab's native launch and WebView covers use `CodingLabSplashView` on iOS
+and Android. They mirror the web `FlaskLoader.tsx` / `flask-loader.css`: a 96pt/dp
+flask on a 48-unit path, liquid at y=29 while waiting, a 22pt caption gap, bubbles
+and waves at 1.4s, and steam at 1.8s. Colors follow the saved web theme/accent,
+including dark-soft. Reduced motion keeps a pulsing flask without moving particles.
+
+All three renderers derive animation phase from Unix time, so replacing the native
+cover does not restart the bubbles or steam. After two animation frames the web
+bootstrap sends `loader-ready`; the shells remove only the native cover, without
+zooming or fading. The web then owns the existing fill/flood reveal. `app-ready`
+remains separate and still owns push delivery and billing reconciliation. Older
+shells ignore the new event; older web builds still reveal through `app-ready`
+or the existing timeout. Capital Wizard retains its own loader.
+
+Validation: build both iOS schemes and both Android flavors, run the web loader
+and full repository tests, and check the flask on a simulator. A signed-in physical
+device launch should cover native → web → application, theme/accent persistence,
+and Reduce Motion; TestFlight is the distribution path for that check.

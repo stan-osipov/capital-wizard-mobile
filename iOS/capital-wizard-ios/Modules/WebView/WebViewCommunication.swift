@@ -67,6 +67,7 @@ class WebViewCommunication: NSObject {
     @objc private func notifyForeground() {
         Task { @MainActor in await StoreService.shared.reconcile() }
         pushForeground()
+        pushSharedImages()
     }
 
     /// Best-effort runtime native → web foreground ping via
@@ -78,6 +79,26 @@ class WebViewCommunication: NSObject {
         DispatchQueue.main.async {
             wkWebView.evaluateJavaScript(js)
         }
+    }
+
+    private var deliveringShare = false
+
+    func pushSharedImages() {
+        #if !CODING_LAB
+        guard didFinalizeLoad, !deliveringShare, let view = wkWebView,
+              view.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
+        deliveringShare = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak view] in
+            let payload = try? SharedImageInbox.next()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.deliveringShare = false
+                guard let payload, let view, self.wkWebView === view,
+                      view.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
+                view.evaluateJavaScript("window.__capital_wizard?.sharedImages?.(\(payload));")
+            }
+        }
+        #endif
     }
 
     func clearData() {
@@ -331,7 +352,20 @@ extension WebViewCommunication: WKScriptMessageHandler {
             onLoaderReady.invoke(())
         }
 
+        if eventName == "shared-images-saved" {
+            #if !CODING_LAB
+            guard let id = dict["id"] as? String,
+                  wkWebView?.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                try? SharedImageInbox.acknowledge(id)
+                DispatchQueue.main.async { self?.pushSharedImages() }
+            }
+            #endif
+            return
+        }
+
         if eventName == "app-ready" {
+            pushSharedImages()
             Task { @MainActor in await StoreService.shared.reconcile() }
             onAppReady.invoke(())
         }

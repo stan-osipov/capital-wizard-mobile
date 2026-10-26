@@ -78,4 +78,5 @@
     <!-- In-app launch splash (mirrors iOS "loader.caption"). -->
     <string name="loader_caption">Обчислюємо ваші дані</string>
 
+    <string name="share_image_error">Не вдалося імпортувати зображення. Спробуйте ще раз: до 4 зображень загальним розміром до 10 МБ.</string>
 </resources>

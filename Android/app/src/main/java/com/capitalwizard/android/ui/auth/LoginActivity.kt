@@ -17,11 +17,16 @@ import com.capitalwizard.android.ui.WebViewActivity
 import com.capitalwizard.android.utils.EventCallback
 import com.capitalwizard.android.utils.ServiceManager
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import com.capitalwizard.android.services.SharedImageInbox
 
 class LoginActivity : AuthActivity() {
 
     private lateinit var binding: ActivityLoginBinding
     private var authService: AuthService? = null
+    private var importingShare = false
 
     private val onLoginCallback = EventCallback<Unit> { navigateToMain() }
 
@@ -159,6 +164,24 @@ class LoginActivity : AuthActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        if (SharedImageInbox.isShare(intent) && intent != null) {
+            importingShare = true
+            lifecycleScope.launch {
+                try {
+                    withContext(Dispatchers.IO) { SharedImageInbox.capture(applicationContext, intent) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    Toast.makeText(this@LoginActivity, R.string.share_image_error, Toast.LENGTH_LONG).show()
+                } finally {
+                    importingShare = false
+                    // Do not capture the same Activity intent again on recreation.
+                    setIntent(Intent(this@LoginActivity, LoginActivity::class.java))
+                    if (!isDestroyed && authService?.isLoggedIn == true) navigateToMain()
+                }
+            }
+            return
+        }
         // A tapped notification announces its click-tracking id here — both the
         // system-tray tap (FCM copies data keys onto the launcher intent) and
         // our own foreground notification funnel through this activity. The id
@@ -300,6 +323,7 @@ class LoginActivity : AuthActivity() {
     }
 
     private fun navigateToMain() {
+        if (importingShare) return
         // WebViewActivity raises the SAME splash (both use @layout/include_splash),
         // so ours stays painted right up to the swap and the two are
         // indistinguishable. Only the caption's timers stop — left running they

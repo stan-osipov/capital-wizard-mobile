@@ -178,3 +178,45 @@ Validation: build both iOS schemes and both Android flavors, run the web loader
 and full repository tests, and check the flask on a simulator. A signed-in physical
 device launch should cover native → web → application, theme/accent persistence,
 and Reduce Motion; TestFlight is the distribution path for that check.
+
+## Receive images from the system share sheet
+
+Capital Wizard accepts up to four images totaling up to 10 MB, from Photos,
+Screenshots, Files, and other sharing apps. HEIC/HEIF images are converted to
+JPEG for the AI; PNG screenshots keep their original bytes. The import opens a
+new Guide chat draft in the current space, with an optional shared message.
+It does not send a message or overwrite an existing draft.
+
+Android's Capital Wizard flavor registers SEND and SEND_MULTIPLE image filters
+on the login entry point. It copies content-URI bytes to private no-backup
+storage before leaving that activity, including when sign-in is needed.
+
+On iOS, the embedded `CapitalWizardShare` extension saves to App Group
+`group.com.capital-wizard.shared-images`. The extension explicitly says to open
+Capital Wizard after saving: launching the containing app from a Share Extension
+is not a supported Apple API. No authentication credentials are shared with the
+extension. Enable that App Group for **both** `com.capital-wizard` and
+`com.capital-wizard.share` in signing/provisioning before a device build. The
+extension version/build must track the containing app when preparing releases.
+Coding Lab does not advertise this share target.
+
+Both shells deliver on app-ready and foreground through
+`window.__capital_wizard.sharedImages({ id, files: [{ name, mime, base64 }], text })`.
+The web app acknowledges `shared-images-saved` only after the ordinary chat draft
+has reached the server. Until then, the native private queue survives relaunch
+and sign-in. At most ten batches are retained, expiring after seven days; a full
+queue or unreadable input produces an error instead of silently dropping files.
+An older web build leaves the share queued. Upload errors remain visible in the
+attachment tray with Retry import. Relaunching also retries the handoff.
+
+This requires a new native build and the matching web changes; it cannot be
+added to already-installed binaries by a web update. No store upload is part of
+this change. Before release, smoke-test screenshot and Photos shares on both
+physical platforms: cold start, running/backgrounded, signed out then sign in,
+multiple images, HEIC orientation, cancel, no network then relaunch, and repeated
+shares. Confirm each appears once in a new draft and reaches AI only after Send.
+
+Run `.coding-lab/actions/check-mobile.sh` for repeatable build/unit/lint checks.
+The script accepts a project-local JDK/Android SDK or configured JAVA_HOME and
+ANDROID_HOME. Simulator/device behavior and App Group signing still need the
+above release smoke test.

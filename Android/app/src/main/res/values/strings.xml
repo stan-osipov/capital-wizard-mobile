@@ -91,4 +91,5 @@
     <!-- Notification channel shown in the system settings list -->
     <string name="push_channel_name">General</string>
     <string name="push_channel_description">Reminders and updates from Capital Wizard</string>
+    <string name="share_image_error">Could not import images. Share up to 4 images totaling at most 10 MB, and try again.</string>
 </resources>

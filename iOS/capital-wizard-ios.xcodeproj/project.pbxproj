@@ -5,10 +5,14 @@
 	};
 	objectVersion = 77;
 	objects = {
+/* Begin PBXCopyFilesBuildPhase section */
+        5A4E00000000000000000003 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (5A4E00000000000000000001, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXBuildFile section */
 		CE35BAD12F3735D300A4372C /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CE35BAD02F3735D300A4372C /* Auth */; };
 		C0D1AB000000000000000001 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CE35BAD02F3735D300A4372C /* Auth */; };
+        5A4E00000000000000000001 /* Share extension embed */ = {isa = PBXBuildFile; fileRef = 5A4E00000000000000000002; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,6 +30,7 @@
 			remoteGlobalIDString = CE35BA842F37336B00A4372C;
 			remoteInfo = "capital-wizard-ios";
 		};
+        5A4E00000000000000000004 = {isa = PBXContainerItemProxy; containerPortal = CE35BA7D2F37336B00A4372C; proxyType = 1; remoteGlobalIDString = 5A4E00000000000000000005; remoteInfo = CapitalWizardShare; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +38,7 @@
 		CE35BA9B2F37336D00A4372C /* capital-wizard-iosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "capital-wizard-iosTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE35BAA52F37336D00A4372C /* capital-wizard-iosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "capital-wizard-iosUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0D1AB000000000000000002 /* coding-lab-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "coding-lab-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+        5A4E00000000000000000002 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CapitalWizardShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -53,6 +59,7 @@
             membershipExceptions = (Info.plist);
             target = C0D1AB000000000000000008 /* coding-lab-ios */;
         };
+        5A4E00000000000000000007 = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist, ); target = 5A4E00000000000000000005; };
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -81,6 +88,8 @@
             path = CodingLab;
             sourceTree = "<group>";
         };
+        5A4E00000000000000000008 = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (5A4E00000000000000000007, ); path = CapitalWizardShare; sourceTree = "<group>"; };
+        5A4E00000000000000000009 = {isa = PBXFileSystemSynchronizedRootGroup; path = SharedImages; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,12 +116,15 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		C0D1AB000000000000000006 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C0D1AB000000000000000001 /* Auth in Frameworks */); runOnlyForDeploymentPostprocessing = 0; };
+        5A4E0000000000000000000C = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		CE35BA7C2F37336B00A4372C = {
 			isa = PBXGroup;
 			children = (
+                5A4E00000000000000000008,
+                5A4E00000000000000000009,
 				CE35BA872F37336B00A4372C /* capital-wizard-ios */,
                 C0D1AB000000000000000005 /* CodingLab */,
 				CE35BA9E2F37336D00A4372C /* capital-wizard-iosTests */,
@@ -124,6 +136,7 @@
 		CE35BA862F37336B00A4372C /* Products */ = {
 			isa = PBXGroup;
 			children = (
+                5A4E00000000000000000002,
 				CE35BA852F37336B00A4372C /* capital-wizard-ios.app */,
                 C0D1AB000000000000000002 /* coding-lab-ios.app */,
 				CE35BA9B2F37336D00A4372C /* capital-wizard-iosTests.xctest */,
@@ -139,6 +152,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = CE35BAAE2F37336D00A4372C /* Build configuration list for PBXNativeTarget "capital-wizard-ios" */;
 			buildPhases = (
+                5A4E00000000000000000003,
 				CE35BA812F37336B00A4372C /* Sources */,
 				CE35BA822F37336B00A4372C /* Frameworks */,
 				CE35BA832F37336B00A4372C /* Resources */,
@@ -146,8 +160,10 @@
 			buildRules = (
 			);
 			dependencies = (
+                5A4E00000000000000000006,
 			);
 			fileSystemSynchronizedGroups = (
+                5A4E00000000000000000009,
 				CE35BA872F37336B00A4372C /* capital-wizard-ios */,
 			);
 			name = "capital-wizard-ios";
@@ -217,6 +233,16 @@
             productReference = C0D1AB000000000000000002 /* coding-lab-ios.app */;
             productType = "com.apple.product-type.application";
         };
+        5A4E00000000000000000005 = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = 5A4E0000000000000000000D;
+            buildPhases = (5A4E0000000000000000000A, 5A4E0000000000000000000C, 5A4E0000000000000000000B, );
+            buildRules = (); dependencies = ();
+            fileSystemSynchronizedGroups = (5A4E00000000000000000008, 5A4E00000000000000000009, );
+            name = CapitalWizardShare; productName = CapitalWizardShare;
+            productReference = 5A4E00000000000000000002;
+            productType = "com.apple.product-type.app-extension";
+        };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -258,6 +284,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+                5A4E00000000000000000005,
                 C0D1AB000000000000000008 /* coding-lab-ios */,
 				CE35BA842F37336B00A4372C /* capital-wizard-ios */,
 				CE35BA9A2F37336D00A4372C /* capital-wizard-iosTests */,
@@ -289,6 +316,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		C0D1AB000000000000000009 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        5A4E0000000000000000000B = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -314,6 +342,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		C0D1AB000000000000000007 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        5A4E0000000000000000000A = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -327,6 +356,7 @@
 			target = CE35BA842F37336B00A4372C /* capital-wizard-ios */;
 			targetProxy = CE35BAA62F37336D00A4372C /* PBXContainerItemProxy */;
 		};
+        5A4E00000000000000000006 = {isa = PBXTargetDependency; target = 5A4E00000000000000000005; targetProxy = 5A4E00000000000000000004; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -657,6 +687,32 @@
 			name = Release;
 		};
 
+        5A4E0000000000000000000E = {isa = XCBuildConfiguration; buildSettings = {
+            APPLICATION_EXTENSION_API_ONLY = YES;
+            CODE_SIGN_ENTITLEMENTS = CapitalWizardShare/CapitalWizardShare.entitlements;
+            CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = V3B5J86794;
+            CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 1.7;
+            GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = CapitalWizardShare/Info.plist;
+            IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+            LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+            PRODUCT_BUNDLE_IDENTIFIER = "com.capital-wizard.share";
+            PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES;
+            SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+            SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
+        }; name = Debug; };
+        5A4E0000000000000000000F = {isa = XCBuildConfiguration; buildSettings = {
+            APPLICATION_EXTENSION_API_ONLY = YES;
+            CODE_SIGN_ENTITLEMENTS = CapitalWizardShare/CapitalWizardShare.entitlements;
+            CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = V3B5J86794;
+            CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 1.7;
+            GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = CapitalWizardShare/Info.plist;
+            IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+            LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+            PRODUCT_BUNDLE_IDENTIFIER = "com.capital-wizard.share";
+            PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES;
+            SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+            SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
+        }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -702,6 +758,7 @@
             defaultConfigurationIsVisible = 0;
             defaultConfigurationName = Release;
         };
+        5A4E0000000000000000000D = {isa = XCConfigurationList; buildConfigurations = (5A4E0000000000000000000E, 5A4E0000000000000000000F, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */

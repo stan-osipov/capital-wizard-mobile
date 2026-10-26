@@ -670,6 +670,7 @@ class WebViewActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        bridge.pushSharedImages()
         deepLinkService?.handle(intent.data)
         routePendingDeepLink()
     }
@@ -684,6 +685,7 @@ class WebViewActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         lifecycleScope.launch { StoreService.reconcile(this@WebViewActivity) }
+        bridge.pushSharedImages()
 
         // Backstop for a tap that stashed a page while we were coming up and
         // whose event nobody was subscribed for yet. One-shot, so this is a

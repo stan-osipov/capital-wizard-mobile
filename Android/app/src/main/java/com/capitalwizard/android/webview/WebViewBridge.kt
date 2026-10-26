@@ -9,6 +9,8 @@ import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import com.capitalwizard.android.services.SharedImageInbox
+import kotlinx.coroutines.withContext
 import com.capitalwizard.android.services.StoreService
 import com.capitalwizard.android.services.AuthService
 import com.capitalwizard.android.services.PushRegistration
@@ -485,6 +487,26 @@ class WebViewBridge {
         }
     }
 
+    private var deliveringShare = false
+
+    fun pushSharedImages() {
+        val view = webView ?: return
+        view.post {
+            if (!isReady || deliveringShare || Uri.parse(view.url ?: "").host != Uri.parse(baseUrl(view.context)).host) return@post
+            deliveringShare = true
+            CoroutineScope(Dispatchers.Main).launch {
+                try {
+                    val payload = withContext(Dispatchers.IO) { SharedImageInbox.next(view.context) }
+                    if (payload != null && webView === view && Uri.parse(view.url ?: "").host == Uri.parse(baseUrl(view.context)).host) {
+                        view.evaluateJavascript("window.__capital_wizard?.sharedImages?.($payload);", null)
+                    }
+                } catch (_: Exception) {
+                    // A transient storage failure keeps the inbox for the next foreground.
+                } finally { deliveringShare = false }
+            }
+        }
+    }
+
     private fun parseSystemMessage(json: JSONObject) {
         val eventName = json.optString("eventName")
         // Button preference is applied by the web; refresh always reaches here.
@@ -512,7 +534,18 @@ class WebViewBridge {
             "loader-ready" -> {
                 if (com.capitalwizard.android.utils.AppProduct.isCodingLab) onLoaderReady.invoke(Unit)
             }
+            "shared-images-saved" -> {
+                val view = webView ?: return
+                view.post {
+                    if (Uri.parse(view.url ?: "").host != Uri.parse(baseUrl(view.context)).host) return@post
+                    CoroutineScope(Dispatchers.Main).launch {
+                        withContext(Dispatchers.IO) { SharedImageInbox.acknowledge(view.context, json.optString("id")) }
+                        pushSharedImages()
+                    }
+                }
+            }
             "app-ready" -> {
+                pushSharedImages()
                 onAppReady.invoke(Unit)
                 webView?.post {
                     val activity = webView?.context as? Activity ?: return@post

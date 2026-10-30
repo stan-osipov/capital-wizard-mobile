@@ -348,7 +348,8 @@ extension WebViewCommunication: WKScriptMessageHandler {
             finilizeLoad()
         }
 
-        if eventName == "loader-ready", AppProduct.current == .codingLab {
+        // A painted web loader can take over before services finish initializing.
+        if eventName == "loader-ready" {
             onLoaderReady.invoke(())
         }
 

@@ -532,7 +532,8 @@ class WebViewBridge {
         when (eventName) {
             "api-ready" -> finalizeLoad()
             "loader-ready" -> {
-                if (com.capitalwizard.android.utils.AppProduct.isCodingLab) onLoaderReady.invoke(Unit)
+                // Transfer only the loading surface; app-ready still flushes pending routes.
+                onLoaderReady.invoke(Unit)
             }
             "shared-images-saved" -> {
                 val view = webView ?: return

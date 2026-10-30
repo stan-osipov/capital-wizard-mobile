@@ -131,11 +131,10 @@ class WebViewApplicationController: ApplicationViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
     }
 
-    /// The web flask is already painted at the same size, position and clock phase.
+    /// The web loading surface (flask or launch prediction) is already painted.
     /// Remove the cover without scaling or restarting the animation. App readiness
     /// still owns billing/push work; this event only transfers the loading surface.
     func handoffToWebLoader() {
-        guard AppProduct.current == .codingLab else { return }
         readyTimeoutWork?.cancel()
         readyTimeoutWork = nil
         (splashView as? SplashAnimationView)?.stopAllAnimations()

@@ -54,6 +54,15 @@ class WebViewApplicationController: ApplicationViewController {
 
         let config = WKWebViewConfiguration()
         config.processPool = WebViewApplicationConst.sharedProcessPool
+        // Inline <video>. The web app's tutorial clips (Quick Import's
+        // statement-export walkthroughs) carry `playsinline`, and WKWebView
+        // honours that attribute only when the configuration opts in — on
+        // iPhone the default is false, and every <video> is hijacked into the
+        // system fullscreen player on tap, over an app whose own document
+        // never scrolls. Android's WebView plays inline by default
+        // (WebViewActivity.setupWebView says so beside its settings), and no
+        // autoplay is involved anywhere, so playback still waits for a tap.
+        config.allowsInlineMediaPlayback = true
         config.userContentController = contentController
         config.userContentController.addUserScript(self.getNativeAppScript())
         config.userContentController.addUserScript(self.getZoomDisableScript())

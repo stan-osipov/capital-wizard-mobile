@@ -346,6 +346,12 @@ class WebViewActivity : AppCompatActivity() {
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
+
+            // Inline <video> (Quick Import's tutorial clips carry `playsinline`):
+            // Android's WebView plays inline by default, so there is nothing to
+            // set here — iOS has to opt in with `allowsInlineMediaPlayback`
+            // (WebViewApplicationController.createWkWebView). Playback still
+            // waits for a tap on both: nothing autoplays.
         }
 
         // The web app is a fixed app shell with its own scroll containers — kill

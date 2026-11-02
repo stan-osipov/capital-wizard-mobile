@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- Share targets. All of them land on LoginActivity (singleTask), so a
+             share LAUNCHES the app and the share is read by SharedImageInbox,
+             which routes it by `kind`: pictures to an AI chat draft, a document
+             to the import wizard.
+
+             iOS needs two separate doors for this — a Share Extension for
+             pictures and `CFBundleDocumentTypes` for documents — because an iOS
+             extension cannot launch its containing app. Here one activity
+             serves both. -->
         <activity android:name=".ui.auth.LoginActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -11,6 +20,31 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <!-- Statements. SEND only, never SEND_MULTIPLE: the wizard parses
+                 one statement, so appearing in the share sheet for a batch
+                 would be an offer we cannot honour.
+
+                 Deliberately an ALLOW-LIST of statement shapes rather than
+                 `*/*`, which would put Capital Wizard in every share sheet on
+                 the device — including the `text/plain` one behind every shared
+                 link. `application/octet-stream` IS here, because file managers
+                 routinely report it for a perfectly good .xlsx; the name is what
+                 decides the route in that case (SharedImageInbox.capture).
+
+                 Keep in step with the UTIs in
+                 ../../../iOS/capital-wizard-ios/Info.plist → CFBundleDocumentTypes. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/vnd.ms-excel" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="application/csv" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
     </application>

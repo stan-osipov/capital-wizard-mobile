@@ -15,6 +15,43 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Statement formats the app can be HANDED, which is what puts Capital
+	     Wizard in the share sheet (and in "Open in") for a document and makes
+	     iOS LAUNCH it with the file — see SceneDelegate.takeSharedFile.
+
+	     This is the only App-Store-supported way to open the app from a share:
+	     a Share Extension cannot launch its containing app (no public API —
+	     see CapitalWizardShare/ShareViewController), so pictures keep going
+	     through the extension and land in the AI chat, while documents come in
+	     here and open the import wizard.
+
+	     Deliberately an ALLOW-LIST of statement shapes rather than
+	     `public.data`/`public.content`, which would offer Capital Wizard for
+	     every file on the device — a .zip, a .mov, an .ipa. Adding a format a
+	     new parser can read is a line here plus the matching MIME type in
+	     Android/app/src/capitalWizard/AndroidManifest.xml; keep the two in step.
+
+	     `Viewer`, not `Editor`: an import reads the statement and never writes
+	     it back. `Alternate`, not `Owner`/`Default`: being handed a PDF must
+	     not make us the system's PDF opener. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Statement</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.adobe.pdf</string>
+				<string>org.openxmlformats.spreadsheetml.sheet</string>
+				<string>com.microsoft.excel.xls</string>
+				<string>public.comma-separated-values-text</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Capital Wizard uses the microphone so you can dictate a message to the assistant instead of typing it. Recordings are sent for transcription and are not stored.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

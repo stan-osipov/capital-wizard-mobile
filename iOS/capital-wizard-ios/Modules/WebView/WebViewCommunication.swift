@@ -62,6 +62,23 @@ class WebViewCommunication: NSObject {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+
+        // A statement the app itself was handed (SceneDelegate.takeSharedFile).
+        // Its own signal rather than a lean on `didBecomeActive`: opening a
+        // document from an app that is already frontmost moves the app through
+        // no lifecycle state at all, and the read is asynchronous, so the file
+        // can land in the inbox well after any activation notification.
+        //
+        // Guarded like `pushSharedImages` below — the inbox is not built into
+        // the Coding Lab target, which has no import wizard to deliver to.
+        #if !CODING_LAB
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(notifySharedFile),
+            name: SharedImageInbox.didReceive,
+            object: nil
+        )
+        #endif
     }
 
     @objc private func notifyForeground() {
@@ -69,6 +86,12 @@ class WebViewCommunication: NSObject {
         pushForeground()
         pushSharedImages()
     }
+
+    #if !CODING_LAB
+    @objc private func notifySharedFile() {
+        DispatchQueue.main.async { [weak self] in self?.pushSharedImages() }
+    }
+    #endif
 
     /// Best-effort runtime native → web foreground ping via
     /// `window.__capital_wizard.foreground({…})`. No-op before the first load

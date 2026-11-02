@@ -79,4 +79,5 @@
     <string name="loader_caption">Обчислюємо ваші дані</string>
 
     <string name="share_image_error">Не вдалося імпортувати зображення. Спробуйте ще раз: до 4 зображень загальним розміром до 10 МБ.</string>
+    <string name="share_file_error">Не вдалося відкрити цей файл. Надішліть виписку розміром до 10 МБ і спробуйте ще раз.</string>
 </resources>

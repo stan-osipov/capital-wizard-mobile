@@ -166,13 +166,20 @@ class LoginActivity : AuthActivity() {
     private fun handleIntent(intent: Intent?) {
         if (SharedImageInbox.isShare(intent) && intent != null) {
             importingShare = true
+            // Decided before the coroutine, while this intent is still the one
+            // in hand: the `finally` below replaces it.
+            val failureMessage = if (SharedImageInbox.looksLikeImageShare(intent)) {
+                R.string.share_image_error
+            } else {
+                R.string.share_file_error
+            }
             lifecycleScope.launch {
                 try {
                     withContext(Dispatchers.IO) { SharedImageInbox.capture(applicationContext, intent) }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    Toast.makeText(this@LoginActivity, R.string.share_image_error, Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@LoginActivity, failureMessage, Toast.LENGTH_LONG).show()
                 } finally {
                     importingShare = false
                     // Do not capture the same Activity intent again on recreation.

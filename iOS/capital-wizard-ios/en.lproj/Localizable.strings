@@ -64,3 +64,8 @@
 
 /* Boot Loader */
 "loader.caption" = "Crunching the numbers";
+
+/* Shared statement (Share sheet / Open in — see SceneDelegate) */
+"share.file_error.title" = "Could not open that file";
+"share.file_error.message" = "Share a statement of at most 10 MB. Open Capital Wizard to finish any pending import, then try again.";
+"share.file_error.ok" = "OK";

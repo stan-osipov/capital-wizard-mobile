@@ -64,3 +64,8 @@
 
 /* Boot Loader */
 "loader.caption" = "Обчислюємо ваші дані";
+
+/* Shared statement (Share sheet / Open in — see SceneDelegate) */
+"share.file_error.title" = "Не вдалося відкрити цей файл";
+"share.file_error.message" = "Надішліть виписку розміром до 10 МБ. Відкрийте Capital Wizard, щоб завершити попередній імпорт, і спробуйте ще раз.";
+"share.file_error.ok" = "OK";

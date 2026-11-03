@@ -134,8 +134,14 @@ class WebViewBridge {
         // than drawing a microphone that can only ever fail — the same "degrade
         // to unknown, never to a wrong answer" rule `idiom` and `endpoint`
         // follow. Mirrors the iOS shell's `mic: true`.
+        // `hapticKinds` names the feels THIS build answers. The web app ships
+        // years ahead of whatever shell is installed, so a kind it asks for and
+        // this shell has never heard of would be dropped on the floor in
+        // silence; with the list it falls back to the nearest thing we do know.
+        // A shell built before this reports nothing here, and the web app reads
+        // that as the two kinds every shell has always had. Mirrors iOS.
         return """
-            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true, haptics: true, store: ${StoreService.available} };
+            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true, haptics: true, hapticKinds: ['button', 'refresh', 'tick'], store: ${StoreService.available} };
             document.documentElement.classList.add('cw-native-android');
         """.trimIndent()
     }
@@ -514,14 +520,22 @@ class WebViewBridge {
         // which needs no vibration permission and respects the OS preference.
         if (eventName == "haptic") {
             val kind = json.optString("kind")
-            if (kind != "button" && kind != "refresh") return
+            if (kind != "button" && kind != "refresh" && kind != "tick") return
             val view = webView ?: return
             view.post {
                 if (webView !== view || Uri.parse(view.url ?: "").host != Uri.parse(baseUrl(view.context)).host) return@post
-                val feedback = if (kind == "refresh") {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM
-                    else HapticFeedbackConstants.LONG_PRESS
-                } else HapticFeedbackConstants.CONTEXT_CLICK
+                val feedback = when (kind) {
+                    "refresh" ->
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM
+                        else HapticFeedbackConstants.LONG_PRESS
+                    // A scrub tick fires tens of times during one drag along a
+                    // chart, so it is the OS's own "the value under your finger
+                    // moved" tap rather than an impact. CLOCK_TICK is the
+                    // lightest constant every supported API level carries;
+                    // iOS expresses the same thing as a selection change.
+                    "tick" -> HapticFeedbackConstants.CLOCK_TICK
+                    else -> HapticFeedbackConstants.CONTEXT_CLICK
+                }
                 view.performHapticFeedback(feedback)
             }
             return

@@ -38,6 +38,10 @@ class WebViewCommunication: NSObject {
     
     private let buttonFeedback = UIImpactFeedbackGenerator(style: .light)
     private let refreshFeedback = UIImpactFeedbackGenerator(style: .medium)
+    // A scrub tick is a SELECTION change, not an impact: it fires tens of times
+    // during one drag along a chart, and an impact generator at that rate reads
+    // as a buzz rather than as a count. Mirrors Android's CLOCK_TICK.
+    private let selectionFeedback = UISelectionFeedbackGenerator()
 
     private var didFinalizeLoad: Bool = false
     
@@ -342,11 +346,15 @@ extension WebViewCommunication: WKScriptMessageHandler {
         // Run UIKit feedback on the main thread and only for our current page.
         if eventName == "haptic" {
             guard let kind = dict["kind"] as? String,
-                  kind == "button" || kind == "refresh" else { return }
+                  kind == "button" || kind == "refresh" || kind == "tick" else { return }
             DispatchQueue.main.async { [weak self] in
                 guard let self, let view = self.wkWebView,
                       view.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
-                (kind == "refresh" ? self.refreshFeedback : self.buttonFeedback).impactOccurred()
+                if kind == "tick" {
+                    self.selectionFeedback.selectionChanged()
+                } else {
+                    (kind == "refresh" ? self.refreshFeedback : self.buttonFeedback).impactOccurred()
+                }
             }
             return
         }

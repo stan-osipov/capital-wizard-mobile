@@ -251,8 +251,14 @@ class WebViewApplicationController: ApplicationViewController {
         // the web app hides dictation rather than drawing a microphone that can
         // only ever fail — the same "degrade to unknown, never to a wrong
         // answer" rule `idiom` and `endpoint` follow.
+        // `hapticKinds` names the feels THIS build answers. The web app ships
+        // years ahead of whatever shell is installed, so a kind it asks for and
+        // this shell has never heard of would be dropped on the floor in
+        // silence; with the list it falls back to the nearest thing we do know.
+        // A shell built before this reports nothing here, and the web app reads
+        // that as the two kinds every shell has always had. Mirrors Android.
         let source = """
-        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)', mic: true, haptics: true, store: \(StoreService.available ? "true" : "false") };
+        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)', mic: true, haptics: true, hapticKinds: ['button', 'refresh', 'tick'], store: \(StoreService.available ? "true" : "false") };
         document.documentElement.classList.add('cw-native-ios');
         """
         return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)

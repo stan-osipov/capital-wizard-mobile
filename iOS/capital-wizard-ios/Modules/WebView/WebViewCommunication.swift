@@ -38,10 +38,18 @@ class WebViewCommunication: NSObject {
     
     private let buttonFeedback = UIImpactFeedbackGenerator(style: .light)
     private let refreshFeedback = UIImpactFeedbackGenerator(style: .medium)
-    // A scrub tick is a SELECTION change, not an impact: it fires tens of times
-    // during one drag along a chart, and an impact generator at that rate reads
-    // as a buzz rather than as a count. Mirrors Android's CLOCK_TICK.
-    private let selectionFeedback = UISelectionFeedbackGenerator()
+    // A scrub tick fires tens of times during one drag along a chart, so it has
+    // to be the faintest thing the phone can produce and still be felt. The
+    // selection generator — the obvious choice, and what this used to be — is
+    // tuned for a picker wheel turning a few times a second; at a drag's rate
+    // it stops reading as a count and starts reading as the phone buzzing in
+    // the hand. A `.soft` impact at a FRACTION of full strength is the same tap
+    // with the weight taken out of it, which is the one knob `UISelection-
+    // FeedbackGenerator` does not offer. Mirrors Android's SEGMENT_FREQUENT_TICK.
+    private let tickFeedback = UIImpactFeedbackGenerator(style: .soft)
+    /// 0…1. Low enough to read as texture under a moving finger rather than as
+    /// a knock; above ~0.5 it is an impact again.
+    private let tickIntensity: CGFloat = 0.3
 
     private var didFinalizeLoad: Bool = false
     
@@ -360,7 +368,7 @@ extension WebViewCommunication: WKScriptMessageHandler {
                 guard let self, let view = self.wkWebView,
                       view.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
                 if kind == "tick" {
-                    self.selectionFeedback.selectionChanged()
+                    self.tickFeedback.impactOccurred(intensity: self.tickIntensity)
                 } else {
                     (kind == "refresh" ? self.refreshFeedback : self.buttonFeedback).impactOccurred()
                 }

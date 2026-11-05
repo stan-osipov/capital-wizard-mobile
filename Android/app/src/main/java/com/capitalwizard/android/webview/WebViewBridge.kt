@@ -548,10 +548,16 @@ class WebViewBridge {
                         else HapticFeedbackConstants.LONG_PRESS
                     // A scrub tick fires tens of times during one drag along a
                     // chart, so it is the OS's own "the value under your finger
-                    // moved" tap rather than an impact. CLOCK_TICK is the
-                    // lightest constant every supported API level carries;
-                    // iOS expresses the same thing as a selection change.
-                    "tick" -> HapticFeedbackConstants.CLOCK_TICK
+                    // moved" tap rather than an impact — and the faintest one
+                    // the device has. SEGMENT_FREQUENT_TICK exists for exactly
+                    // this: a tick the platform expects to repeat quickly, and
+                    // damps accordingly. Below API 34 there is nothing lighter
+                    // than CLOCK_TICK to fall back to. iOS takes the weight out
+                    // of a soft impact to reach the same feel.
+                    "tick" ->
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                            HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
+                        else HapticFeedbackConstants.CLOCK_TICK
                     else -> HapticFeedbackConstants.CONTEXT_CLICK
                 }
                 view.performHapticFeedback(feedback)

@@ -46,8 +46,11 @@ class AuthService: NSObject, Service {
 
     override init() {
         client = AuthClient(configuration: .init(
-            url: URL(string: "https://qzdgdyqsoldkarcshkbi.supabase.co/auth/v1")!,
-            headers: ["apikey": "sb_publishable_L2uzqtoQjg4somYmI7RmFg_9Hkwsjgl"],
+            // Both read from `SupabaseConfig`, which is the only place this
+            // shell names the project. They used to be written out here and
+            // again in `StoreService`; Apple Pay would have been a third copy.
+            url: SupabaseConfig.authUrl,
+            headers: ["apikey": SupabaseConfig.publishableKey],
             flowType: .pkce,
             redirectToURL: AuthService.redirectURL,
             localStorage: KeychainLocalStorage()

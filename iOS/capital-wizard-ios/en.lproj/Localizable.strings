@@ -69,3 +69,11 @@
 "share.file_error.title" = "Could not open that file";
 "share.file_error.message" = "Share a statement of at most 10 MB. Open Capital Wizard to finish any pending import, then try again.";
 "share.file_error.ok" = "OK";
+
+/* Apple Pay — what a logged payment says on the lock screen (ApplePayPoster) */
+"apple_pay.unknown_merchant" = "Payment";
+"apple_pay.logged" = "Recorded in Capital Wizard";
+"apple_pay.not_logged.title" = "Payment not recorded";
+"apple_pay.not_logged.body" = "There was no amount in that notification. Add it by hand in Capital Wizard.";
+"apple_pay.failed.title" = "Payment not saved";
+"apple_pay.failed.body" = "Open Capital Wizard to see what happened.";

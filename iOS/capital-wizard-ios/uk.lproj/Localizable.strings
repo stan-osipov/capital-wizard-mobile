@@ -69,3 +69,11 @@
 "share.file_error.title" = "Не вдалося відкрити цей файл";
 "share.file_error.message" = "Надішліть виписку розміром до 10 МБ. Відкрийте Capital Wizard, щоб завершити попередній імпорт, і спробуйте ще раз.";
 "share.file_error.ok" = "OK";
+
+/* Apple Pay — що показує сповіщення про записаний платіж (ApplePayPoster) */
+"apple_pay.unknown_merchant" = "Платіж";
+"apple_pay.logged" = "Записано в Capital Wizard";
+"apple_pay.not_logged.title" = "Платіж не записано";
+"apple_pay.not_logged.body" = "У тому сповіщенні не було суми. Додайте платіж вручну в Capital Wizard.";
+"apple_pay.failed.title" = "Платіж не збережено";
+"apple_pay.failed.body" = "Відкрийте Capital Wizard, щоб побачити, що сталося.";

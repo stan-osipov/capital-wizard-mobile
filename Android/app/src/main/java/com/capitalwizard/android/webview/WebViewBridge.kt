@@ -140,8 +140,26 @@ class WebViewBridge {
         // silence; with the list it falls back to the nearest thing we do know.
         // A shell built before this reports nothing here, and the web app reads
         // that as the two kinds every shell has always had. Mirrors iOS.
+        // `applePay` is FALSE here, and that is a real platform difference
+        // rather than an unimplemented half — the one case this repo's lockstep
+        // rule asks to be documented instead of mirrored.
+        //
+        // On iOS a payment records itself because Shortcuts can fire an
+        // automation on a Wallet notification and hand it to an App Intent.
+        // Android has no equivalent: the nearest thing is a
+        // NotificationListenerService reading the bank's own alerts, which
+        // needs BIND_NOTIFICATION_LISTENER_SERVICE — a special access the user
+        // grants in a system settings screen, declarable to Google Play only
+        // with a core-functionality justification — plus a text parser per bank
+        // per language. That is a different feature with a different risk
+        // profile, and it is deliberately not built.
+        //
+        // What Android users are pointed at instead is the bank connection
+        // under Payments → Import, which brings card payments in with the
+        // statement. The web app says exactly that: see
+        // `applePay.unavailable.android` in the transactions locale.
         return """
-            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true, haptics: true, hapticKinds: ['button', 'refresh', 'tick'], store: ${StoreService.available} };
+            window.__capital_wizard_native = { platform: 'android', idiom: '$idiom', endpoint: '$endpoint', mic: true, haptics: true, hapticKinds: ['button', 'refresh', 'tick'], store: ${StoreService.available}, applePay: false };
             document.documentElement.classList.add('cw-native-android');
         """.trimIndent()
     }
@@ -545,6 +563,17 @@ class WebViewBridge {
 
         when (eventName) {
             "api-ready" -> finalizeLoad()
+            // The web app posts this whenever somebody saves their Apple Pay
+            // settings, and on this platform there is nothing to keep: we
+            // advertise `applePay: false`, so the screen that sends it is not
+            // even drawn here — only a build mismatch or a shared account
+            // opening the page could produce one.
+            //
+            // Named rather than left to fall through, so the two bridges answer
+            // the same vocabulary and a reader comparing them finds a stated
+            // decision instead of a gap. See `getNativeAppScript` above for why
+            // the platforms differ at all.
+            "apple-pay-configure" -> Unit
             "loader-ready" -> {
                 // Transfer only the loading surface; app-ready still flushes pending routes.
                 onLoaderReady.invoke(Unit)

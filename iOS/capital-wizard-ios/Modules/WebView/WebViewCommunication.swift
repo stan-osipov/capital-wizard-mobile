@@ -89,6 +89,15 @@ class WebViewCommunication: NSObject {
         Task { @MainActor in await StoreService.shared.reconcile() }
         pushForeground()
         pushSharedImages()
+        #if !CODING_LAB
+        // Any Apple Pay payment the intent could not send — no network at the
+        // till, or a Keychain it could not read while the phone was locked —
+        // goes out now. Coming to the foreground is the one moment both of
+        // those are reliably true again, which is why this is the drain that
+        // actually rescues a held payment rather than the one in the intent.
+        // Cheap when there is nothing queued: one directory listing.
+        Task { await ApplePayPoster.drain() }
+        #endif
     }
 
     #if !CODING_LAB
@@ -377,6 +386,40 @@ extension WebViewCommunication: WKScriptMessageHandler {
 
         if eventName == "api-ready" {
             finilizeLoad()
+        }
+
+        // WHERE THIS PHONE LOGS APPLE PAY PAYMENTS. The App Intent runs with
+        // nobody watching — on a lock screen, seconds after a tap at a till —
+        // so it cannot ask which space the payment belongs to and cannot reach
+        // the web app to find out: on a cold intent launch there is no WebView
+        // and never will be one. So the settings screen TELLS the shell, once,
+        // and the shell keeps the answer. `applePayNative.ts` is the other half
+        // of this contract; `ApplePayConfigStore.apply` validates the payload.
+        //
+        // The host check is the same one every branch here makes, and it earns
+        // its keep more than most: this message decides where a person's
+        // payments are written, so it is taken only from our own page.
+        if eventName == "apple-pay-configure" {
+            #if !CODING_LAB
+            guard wkWebView?.url?.host == URL(string: EndpointStore.baseUrl)?.host else { return }
+            switch ApplePayConfigStore.apply(dict) {
+            case .configured(_, let typeCount):
+                // No space name and no ids in the log — it is copied into
+                // support messages. The count is what answers "did the category
+                // list actually arrive?", which is the one question this log is
+                // ever asked.
+                CWLog.shared.log("Apple Pay: configured with \(typeCount) categor\(typeCount == 1 ? "y" : "ies")", category: "ApplePay")
+                // Anything captured while the phone was unconfigured — or while
+                // it was offline — goes out now. The web app is on screen, so
+                // the device is unlocked and the Keychain is readable, which is
+                // the one moment a held payment is certain to be sendable.
+                Task { await ApplePayPoster.drain() }
+            case .cleared:
+                CWLog.shared.log("Apple Pay: logging turned off", category: "ApplePay")
+            case .ignored:
+                CWLog.shared.log("Apple Pay: ignored a configure message that did not parse", category: "ApplePay")
+            }
+            #endif
         }
 
         // A painted web loader can take over before services finish initializing.

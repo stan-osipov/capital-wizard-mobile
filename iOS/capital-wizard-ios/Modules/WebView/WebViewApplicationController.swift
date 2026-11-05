@@ -257,8 +257,21 @@ class WebViewApplicationController: ApplicationViewController {
         // silence; with the list it falls back to the nearest thing we do know.
         // A shell built before this reports nothing here, and the web app reads
         // that as the two kinds every shell has always had. Mirrors Android.
+        // `applePay` says THIS BUILD carries the App Intent a Shortcuts
+        // automation hands a Wallet payment to. Conditional for two reasons and
+        // both matter: Coding Lab has no ledger to log a payment into and does
+        // not compile the intent at all, and the web app must read a shell
+        // built before this as "cannot", not as "can" — a setup guide whose
+        // every step names a shortcut that would call nothing is worse than no
+        // guide. Android reports it false; see `WebViewBridge.getNativeAppScript`
+        // for why that is a real platform difference rather than a missing half.
+        #if CODING_LAB
+        let applePay = "false"
+        #else
+        let applePay = "true"
+        #endif
         let source = """
-        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)', mic: true, haptics: true, hapticKinds: ['button', 'refresh', 'tick'], store: \(StoreService.available ? "true" : "false") };
+        window.__capital_wizard_native = { platform: 'ios', idiom: '\(idiom)', endpoint: '\(endpoint)', mic: true, haptics: true, hapticKinds: ['button', 'refresh', 'tick'], store: \(StoreService.available ? "true" : "false"), applePay: \(applePay) };
         document.documentElement.classList.add('cw-native-ios');
         """
         return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)

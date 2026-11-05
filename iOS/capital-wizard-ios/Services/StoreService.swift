@@ -58,7 +58,14 @@ import Auth
         do { session = try await auth.client.session }
         catch { throw StoreFailure(code: "session_unavailable") }
         guard session.user.id.uuidString.lowercased() == userId, currentUserId == userId else { throw StoreFailure(code: "account_mismatch") }
-        var request = URLRequest(url: URL(string: "https://qzdgdyqsoldkarcshkbi.supabase.co/functions/v1/store-verify")!)
+        // `SupabaseConfig` is the single place the project is named — see that
+        // file. Optional rather than force-unwrapped, so a composition failure
+        // becomes the same declined-call this method already knows how to
+        // report instead of a crash inside a purchase.
+        guard let endpoint = SupabaseConfig.functionUrl("store-verify") else {
+            throw StoreFailure(code: "server_unavailable")
+        }
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 25
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")

@@ -6,7 +6,7 @@
   "archive": "coding-lab-ios",
   "uploadedAt": "2026-11-06",
   "releaseMode": "automatically-after-approval",
-  "status": "prepare-for-submission",
+  "status": "waiting-for-review",
   "localizations": [
     "en-US",
     "uk"
@@ -18,14 +18,15 @@
   "reviewAccount": "dedicated demo account; credentials stored outside version control",
   "sampleWorkspace": "three projects and six explicitly labeled sample conversations; no production worker or repository attached",
   "privacy": "published; account-linked functional and analytics data, no tracking",
-  "pending": [
-    "Wait for screenshot processing and submit for App Review"
-  ],
+  "pending": [],
   "webCommit": "058d6f456b4f7f599647879fcb0497d7f34034d2",
   "webDeployment": {
     "url": "https://app.coding-lab.co",
     "commit": "058d6f456b4f7f599647879fcb0497d7f34034d2",
     "verifiedAt": "2026-11-06",
     "privacyAndSupport": "live and verified"
-  }
+  },
+  "submittedAt": "2026-11-06T20:27:00+02:00",
+  "submissionId": "c0024248-a085-47b6-abaa-ba7286e521f7",
+  "submissionUrl": "https://appstoreconnect.apple.com/apps/6820305020/distribution/reviewsubmissions/details/c0024248-a085-47b6-abaa-ba7286e521f7"
 }

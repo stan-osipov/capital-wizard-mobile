@@ -1,0 +1,27 @@
+{
+  "appId": "6820305020",
+  "bundleId": "co.coding-lab.ios",
+  "version": "1.0",
+  "build": "5",
+  "archive": "coding-lab-ios",
+  "uploadedAt": "2026-11-06",
+  "releaseMode": "automatically-after-approval",
+  "status": "prepare-for-submission",
+  "localizations": [
+    "en-US",
+    "uk"
+  ],
+  "screenshots": {
+    "iphone-large": "two real native captures per locale, uploaded; App Store Connect reuses these for medium display",
+    "ipad-13": "pending"
+  },
+  "reviewAccount": "dedicated demo account; credentials stored outside version control",
+  "sampleWorkspace": "three projects and six explicitly labeled sample conversations; no production worker or repository attached",
+  "privacy": "published; account-linked functional and analytics data, no tracking",
+  "pending": [
+    "Capture and upload 13-inch iPad screenshots",
+    "Deploy product-specific privacy/support pages to Cloudflare",
+    "Submit completed version for App Review"
+  ],
+  "webCommit": "058d6f456b4f7f599647879fcb0497d7f34034d2"
+}

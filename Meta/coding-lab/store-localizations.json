@@ -1,0 +1,24 @@
+{
+  "en": {
+    "promotionalText": "Keep your AI coding projects moving from your iPhone or iPad. Follow conversations, check your workers, and review progress wherever you are.",
+    "description": "Coding Lab brings your AI coding projects, conversations, and connected machines into one workspace on iPhone and iPad.\n\nKEEP PROJECTS TOGETHER\nOrganize coding projects and their checkouts. Keep repositories, working instructions, and project conversations in one place.\n\nFOLLOW THE WORK\nStart and continue conversations, read responses, and see the status of your coding sessions while away from your desk.\n\nUSE MACHINES YOU CONTROL\nConnect a worker on a compatible Mac or Linux computer. Coding sessions run on that machine using the AI accounts you connect, while your phone keeps you in touch with the work.\n\nSEE YOUR TEAM’S PROGRESS\nView live activity and reports for your workspace. Follow conversations and compare activity across projects and people.\n\nBUILT FOR YOUR WORKSPACE\nSwitch between projects, manage your connected workers, and use the app in English or Ukrainian.\n\nA Coding Lab account and an internet connection are required. Running coding sessions requires a configured worker on a separate computer and a supported AI provider account. Provider availability, limits, and charges depend on the account you connect.",
+    "keywords": "developer,programming,code,projects,agents,workspace,remote,team,tasks,automation",
+    "supportUrl": "https://app.coding-lab.co/support",
+    "marketingUrl": "https://coding-lab.co",
+    "name": "Coding Lab: AI Workspace",
+    "subtitle": "AI projects, wherever you are",
+    "privacyPolicyUrl": "https://app.coding-lab.co/privacy",
+    "copyright": "2026 KAPPS TOV"
+  },
+  "ua": {
+    "promotionalText": "Керуйте ШІ-проєктами з iPhone та iPad. Продовжуйте розмови, перевіряйте робочі машини й стежте за прогресом команди, де б ви не були.",
+    "description": "Coding Lab об’єднує проєкти розробки, розмови з ШІ та підключені комп’ютери в одному робочому просторі на iPhone та iPad.\n\nУСЕ ПРО ПРОЄКТ — ПОРУЧ\nОрганізовуйте проєкти та їхні робочі копії. Зберігайте репозиторії, робочі інструкції й розмови про проєкт в одному місці.\n\nСТЕЖТЕ ЗА РОБОТОЮ\nПочинайте й продовжуйте розмови, читайте відповіді та перевіряйте стан завдань, коли ви далеко від робочого столу.\n\nВИКОРИСТОВУЙТЕ ВЛАСНІ КОМП’ЮТЕРИ\nПідключіть воркер на сумісному Mac або комп’ютері з Linux. Завдання виконуються на цій машині через підключені облікові записи ШІ, а телефон дає змогу стежити за роботою.\n\nБАЧТЕ ПРОГРЕС КОМАНДИ\nПереглядайте поточну активність і звіти робочого простору. Стежте за розмовами та порівнюйте активність проєктів і учасників.\n\nВАШ РОБОЧИЙ ПРОСТІР\nПеремикайтеся між проєктами, керуйте підключеними воркерами та користуйтеся застосунком українською або англійською.\n\nПотрібні обліковий запис Coding Lab і підключення до інтернету. Для виконання завдань потрібен налаштований воркер на окремому комп’ютері та обліковий запис підтримуваного ШІ-провайдера. Доступність, ліміти й вартість послуг провайдера залежать від підключеного облікового запису.",
+    "keywords": "розробка,програмування,код,проєкти,агенти,команда,завдання,автоматизація,воркер",
+    "supportUrl": "https://app.coding-lab.co/support",
+    "marketingUrl": "https://coding-lab.co",
+    "name": "Coding Lab: ШІ для розробки",
+    "subtitle": "Проєкти й ШІ завжди поруч",
+    "privacyPolicyUrl": "https://app.coding-lab.co/privacy",
+    "copyright": "2026 KAPPS TOV"
+  }
+}

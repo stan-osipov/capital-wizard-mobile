@@ -92,8 +92,11 @@ struct LogApplePayPaymentIntent: AppIntent {
 
     static var title: LocalizedStringResource = "Log a payment"
 
+    // App Store Connect validates this exported Siri metadata after upload and
+    // rejects descriptions containing "Apple" (90626). Android has no App Intent
+    // metadata; its unsupported capability remains unchanged.
     static var description = IntentDescription(
-        "Records an Apple Pay payment in Capital Wizard. Set this to run from a Shortcuts automation on your Wallet notifications."
+        "Records a payment in Capital Wizard. Run this action from a transaction or notification automation."
     )
 
     static var openAppWhenRun: Bool = false

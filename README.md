@@ -106,7 +106,7 @@ Build tools and caches installed for this worktree live under ignored `.build/`.
    account for the team that owns `com.capital-wizard`; use automatic signing.
 2. Select the `capital-wizard-ios` scheme and a generic iOS device destination.
    Keep Archive on Release and StoreKit Configuration on None. Set a build number
-   that has not been uploaded for version 1.7 (Xcode can manage this on upload).
+   that has not been uploaded for version 1.9 (Xcode can manage this on upload).
 3. Product → Archive → Distribute App → TestFlight Internal Only. This build is
    for administrator testing, not submission to the public App Store.
 4. Wait for App Store Connect processing, then add the build to an internal
@@ -220,3 +220,18 @@ Run `.coding-lab/actions/check-mobile.sh` for repeatable build/unit/lint checks.
 The script accepts a project-local JDK/Android SDK or configured JAVA_HOME and
 ANDROID_HOME. Simulator/device behavior and App Group signing still need the
 above release smoke test.
+
+## TestFlight processing checks
+
+Capital Wizard 1.9 (1) uploaded successfully but failed Apple's subsequent
+processing with 90626: the App Intent description contained “Apple”. Build
+1.9 (2) removes that word from the exported description and explicitly sets
+`LSSupportsOpeningDocumentsInPlace` to false, because statement imports copy
+the document into the private inbox rather than edit the original. These are
+iOS metadata requirements; Android already copies incoming statements and has
+no Siri metadata to validate.
+
+Before upload, inspect the archived app's `Metadata.appintents/extract.actionsdata`
+and `Info.plist`, not just the Swift source. After upload, wait for App Store
+Connect's Build Uploads status to become Complete and confirm the build is
+Testing in the internal group. `EXPORT SUCCEEDED` alone proves only delivery.

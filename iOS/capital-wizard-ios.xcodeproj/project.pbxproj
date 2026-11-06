@@ -368,7 +368,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "capital-wizard-ios/capital-wizard-ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = V3B5J86794;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "capital-wizard-ios/Info.plist";
@@ -384,7 +384,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7;
+				MARKETING_VERSION = 1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.capital-wizard";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -401,7 +401,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "capital-wizard-ios/capital-wizard-ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = V3B5J86794;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "capital-wizard-ios/Info.plist";
@@ -417,7 +417,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7;
+				MARKETING_VERSION = 1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.capital-wizard";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -691,7 +691,7 @@
             APPLICATION_EXTENSION_API_ONLY = YES;
             CODE_SIGN_ENTITLEMENTS = CapitalWizardShare/CapitalWizardShare.entitlements;
             CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = V3B5J86794;
-            CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 1.7;
+            CURRENT_PROJECT_VERSION = 2; MARKETING_VERSION = 1.9;
             GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = CapitalWizardShare/Info.plist;
             IPHONEOS_DEPLOYMENT_TARGET = 16.6;
             LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
@@ -704,7 +704,7 @@
             APPLICATION_EXTENSION_API_ONLY = YES;
             CODE_SIGN_ENTITLEMENTS = CapitalWizardShare/CapitalWizardShare.entitlements;
             CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = V3B5J86794;
-            CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 1.7;
+            CURRENT_PROJECT_VERSION = 2; MARKETING_VERSION = 1.9;
             GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = CapitalWizardShare/Info.plist;
             IPHONEOS_DEPLOYMENT_TARGET = 16.6;
             LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );

@@ -34,6 +34,10 @@
 	     `Viewer`, not `Editor`: an import reads the statement and never writes
 	     it back. `Alternate`, not `Owner`/`Default`: being handed a PDF must
 	     not make us the system's PDF opener. -->
+	<!-- Import a copy, matching Android's private statement inbox. Neither
+	     shell edits the original document or exposes a document browser. -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

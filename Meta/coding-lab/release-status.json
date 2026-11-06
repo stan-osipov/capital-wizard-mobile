@@ -13,15 +13,19 @@
   ],
   "screenshots": {
     "iphone-large": "two real native captures per locale, uploaded; App Store Connect reuses these for medium display",
-    "ipad-13": "pending"
+    "ipad-13": "two real native captures per locale (2064x2752), uploaded"
   },
   "reviewAccount": "dedicated demo account; credentials stored outside version control",
   "sampleWorkspace": "three projects and six explicitly labeled sample conversations; no production worker or repository attached",
   "privacy": "published; account-linked functional and analytics data, no tracking",
   "pending": [
-    "Capture and upload 13-inch iPad screenshots",
-    "Deploy product-specific privacy/support pages to Cloudflare",
-    "Submit completed version for App Review"
+    "Wait for screenshot processing and submit for App Review"
   ],
-  "webCommit": "058d6f456b4f7f599647879fcb0497d7f34034d2"
+  "webCommit": "058d6f456b4f7f599647879fcb0497d7f34034d2",
+  "webDeployment": {
+    "url": "https://app.coding-lab.co",
+    "commit": "058d6f456b4f7f599647879fcb0497d7f34034d2",
+    "verifiedAt": "2026-11-06",
+    "privacyAndSupport": "live and verified"
+  }
 }
